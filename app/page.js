@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="brandMark">A</div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 0.5</div>
+      <div className="versionPill">Alpha 0.6</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -94,6 +94,10 @@ function Dashboard({session}){
   const [selected,setSelected]=useState(null);
   const [detail,setDetail]=useState(null);
   const [search,setSearch]=useState('');
+  const [voiceOpen,setVoiceOpen]=useState(false);
+  const [voiceText,setVoiceText]=useState('');
+  const [voiceResult,setVoiceResult]=useState('');
+  const [voiceListening,setVoiceListening]=useState(false);
   const emptyForm={name:'',customer_number:'',phone:'',email:'',vehicle_interest:'',stage:'lead',notes:'',contract_end_date:'',ordered_at:'',delivered_at:'',test_drive_at:'',planned_delivery_at:''};
   const [form,setForm]=useState(emptyForm);
 
@@ -209,10 +213,108 @@ function Dashboard({session}){
 
   function taskCustomer(t){return customerMap[t.customer_id]||null}
 
+  function findCustomerInSpeech(text){
+    const q=text.toLowerCase();
+    const byNumber=customers.find(c=>c.customer_number&&q.includes(String(c.customer_number).toLowerCase()));
+    if(byNumber)return byNumber;
+    return [...customers].sort((a,b)=>(b.name||'').length-(a.name||'').length).find(c=>{
+      const n=(c.name||'').toLowerCase();
+      const simple=n.replace(/\b(herr|frau)\b/g,'').trim();
+      return n&&q.includes(n) || (simple.length>2&&q.includes(simple));
+    })||null;
+  }
+
+  function parseSpeechDate(text){
+    const q=text.toLowerCase();
+    const now=new Date();
+    let d=new Date(now); d.setSeconds(0,0);
+    if(q.includes('morgen')) d.setDate(d.getDate()+1);
+    else if(q.includes('übermorgen')||q.includes('uebermorgen')) d.setDate(d.getDate()+2);
+    else {
+      const dm=q.match(/\b(\d{1,2})[.\-/](\d{1,2})(?:[.\-/](\d{2,4}))?\b/);
+      if(dm){
+        const y=dm[3]?(dm[3].length===2?2000+Number(dm[3]):Number(dm[3])):now.getFullYear();
+        d=new Date(y,Number(dm[2])-1,Number(dm[1]),now.getHours(),now.getMinutes(),0,0);
+        if(!dm[3] && d<now) d.setFullYear(d.getFullYear()+1);
+      }else{
+        const weekdays={montag:1,dienstag:2,mittwoch:3,donnerstag:4,freitag:5,samstag:6,sonntag:0};
+        const found=Object.keys(weekdays).find(w=>q.includes(w));
+        if(found){
+          const target=weekdays[found], current=now.getDay();
+          let delta=(target-current+7)%7; if(delta===0)delta=7;
+          d.setDate(d.getDate()+delta);
+        }else if(!q.includes('heute')) return null;
+      }
+    }
+    const tm=q.match(/\b(?:um\s*)?(\d{1,2})(?::|\.)(\d{2})\s*(?:uhr)?\b/) || q.match(/\bum\s+(\d{1,2})\s*uhr\b/);
+    if(tm) d.setHours(Number(tm[1]),Number(tm[2]||0),0,0);
+    else return null;
+    return d;
+  }
+
+  function startVoice(){
+    setVoiceResult('');
+    const SR=typeof window!=='undefined'&&(window.SpeechRecognition||window.webkitSpeechRecognition);
+    if(!SR){setVoiceResult('Dein Browser unterstützt die direkte Spracherkennung hier nicht. Du kannst den Befehl unten eintippen.');return}
+    const rec=new SR(); rec.lang='de-DE';rec.interimResults=false;rec.maxAlternatives=1;
+    rec.onstart=()=>setVoiceListening(true);
+    rec.onend=()=>setVoiceListening(false);
+    rec.onerror=()=>{setVoiceListening(false);setVoiceResult('Mikrofon konnte nicht verwendet werden. Du kannst den Befehl auch eintippen.')};
+    rec.onresult=e=>setVoiceText(e.results[0][0].transcript);
+    rec.start();
+  }
+
+  async function runVoiceCommand(){
+    const text=voiceText.trim();
+    if(!text){setVoiceResult('Bitte sprich oder tippe zuerst einen Befehl ein.');return}
+    const q=text.toLowerCase();
+    const c=findCustomerInSpeech(text);
+
+    if((q.includes('öffne')||q.includes('oeffne')||q.includes('zeige'))&&c){
+      setDetail(c);setVoiceOpen(false);setVoiceResult('');return;
+    }
+
+    if(q.includes('notiz')&&c){
+      const note=text.replace(/^.*?notiz(?:\s+bei|\s+für|\s+fuer)?\s*/i,'').replace(new RegExp(c.name,'i'),'').replace(/^[:\s,-]+/,'').trim();
+      const {error}=await supabase.from('ava_history').insert({customer_id:c.id,actor_id:uid,action:'Sprachnotiz',details:note||text});
+      if(error)setVoiceResult(error.message);else{setVoiceResult(`Notiz bei ${c.name} gespeichert.`);await load()}
+      return;
+    }
+
+    if(q.includes('nicht erreicht')&&c){
+      const {error}=await supabase.rpc('ava_voice_not_reached',{p_customer_id:c.id,p_details:`Sprachbefehl: ${text}`});
+      if(error)setVoiceResult(error.message);else{
+        await supabase.from('ava_history').insert({customer_id:c.id,actor_id:uid,action:'Kunde nicht erreicht',details:'Per AVA Spracheingabe · Wiedervorlage in 2 Stunden bzw. nächster sinnvoller Arbeitszeit'});
+        setVoiceResult(`${c.name}: nicht erreicht gespeichert. AVA hat den nächsten Kontaktversuch geplant.`);await load();
+      }
+      return;
+    }
+
+    if(q.includes('probefahrt')&&c){
+      const when=parseSpeechDate(text);
+      if(!when){setVoiceResult(`Kunde erkannt: ${c.name}. Datum/Uhrzeit konnte ich noch nicht eindeutig erkennen. Beispiel: „Probefahrt mit ${c.name} morgen um 15 Uhr.“`);return}
+      const {error}=await supabase.rpc('ava_schedule_test_drive',{p_customer_id:c.id,p_starts_at:when.toISOString(),p_minutes:60,p_vehicle:c.vehicle_interest||''});
+      if(error){
+        setVoiceResult(error.message.includes('TERMIN_CONFLICT')?'Terminüberschneidung erkannt. Bitte nenne einen anderen Zeitpunkt.':error.message);
+      }else{
+        await supabase.from('ava_history').insert({customer_id:c.id,actor_id:uid,action:'Probefahrt per Sprache geplant',details:when.toLocaleString('de-DE')});
+        setVoiceResult(`Probefahrt für ${c.name} am ${when.toLocaleString('de-DE')} geplant. Erinnerungen wurden automatisch angelegt.`);await load();
+      }
+      return;
+    }
+
+    if(!c && (q.includes('probefahrt')||q.includes('nicht erreicht')||q.includes('notiz')||q.includes('öffne')||q.includes('zeige'))){
+      setVoiceResult('Ich konnte den Kunden nicht eindeutig finden. Nenne bitte den Namen oder die Kundennummer.');
+      return;
+    }
+
+    setVoiceResult('Diesen Befehl versteht AVA 0.6 noch nicht. Unterstützt werden aktuell: Probefahrt planen, Kunde nicht erreicht, Sprachnotiz und Kundenakte öffnen.');
+  }
+
   return <div className="appShell">
     <Sidebar tab={tab} setTab={setTab} email={session.user.email}/>
     <main className="workspace">
-      <Topbar tab={tab} onNew={fresh}/>
+      <Topbar tab={tab} onNew={fresh} onVoice={()=>{setVoiceOpen(true);setVoiceResult('')}}/>
       {busy?<LoadingState/>:<>
         {tab==='Heute'&&<TodayView openTasks={openTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
         {tab==='Kunden'&&<CustomersView customers={filteredCustomers} search={search} setSearch={setSearch} onOpen={setDetail} onEdit={edit} onMail={openMail} onNew={fresh}/>}
@@ -224,22 +326,23 @@ function Dashboard({session}){
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
     {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)}/>}
+    {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} onListen={startVoice} onRun={runVoiceCommand} onClose={()=>{setVoiceOpen(false);setVoiceListening(false)}}/>}
   </div>;
 }
 
 function Sidebar({tab,setTab,email}){
   const items=[['Heute','⌂'],['Kalender','▦'],['Kunden','◉'],['Historie','↺'],['Team','◇']];
   return <aside className="sidebar">
-    <div className="sideBrand"><div className="brandMark small">A</div><div><b>AVA</b><span>Alpha 0.5</span></div></div>
+    <div className="sideBrand"><div className="brandMark small">A</div><div><b>AVA</b><span>Alpha 0.6</span></div></div>
     <nav className="sideNav">{items.map(([label,icon])=><button key={label} className={tab===label?'active':''} onClick={()=>setTab(label)}><span>{icon}</span>{label}</button>)}</nav>
     <div className="sideFoot"><div className="userDot">V</div><div className="userMeta"><b>Verkäufer</b><span>{email}</span></div><button className="iconButton" title="Abmelden" onClick={()=>supabase.auth.signOut()}>↗</button></div>
   </aside>;
 }
 
-function Topbar({tab,onNew}){
+function Topbar({tab,onNew,onVoice}){
   return <header className="topbar">
     <div><span className="eyebrow">AVA Workspace</span><h2>{tab}</h2></div>
-    <div className="topActions"><button className="btn soft" onClick={()=>alert('Sprachsteuerung folgt im nächsten Entwicklungsschritt.')}>🎙 AVA</button><button className="btn primary" onClick={onNew}>+ Kunde</button></div>
+    <div className="topActions"><button className="btn soft voiceBtn" onClick={onVoice}>🎙 AVA</button><button className="btn primary" onClick={onNew}>+ Kunde</button></div>
   </header>;
 }
 
@@ -427,6 +530,25 @@ function CustomerForm({selected,form,setForm,onClose,onSubmit}){
       <div className="formSection"><h3>Notizen</h3><textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Gespräch, Wünsche, Besonderheiten…"/></div>
       <div className="modalFoot"><span>Alpha-Test: bitte nur fiktive Kundendaten.</span><div><button type="button" className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary">Speichern</button></div></div>
     </form>
+  </div>;
+}
+
+function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
+  return <div className="modalBackdrop voiceBackdrop">
+    <div className="voiceModal">
+      <div className="modalHead"><div><span className="eyebrow">AVA Sprachassistent</span><h2>Was soll AVA erledigen?</h2><p>Sprich natürlich. Vor Aktionen prüft AVA Kunde, Termin und vorhandene Daten.</p></div><button className="closeButton" onClick={onClose}>×</button></div>
+      <div className={`voiceOrb ${listening?'listening':''}`} onClick={onListen}>🎙</div>
+      <div className="voiceStatus">{listening?'Ich höre zu…':'Mikrofon antippen oder Befehl eintippen'}</div>
+      <textarea className="voiceInput" value={text} onChange={e=>setText(e.target.value)} placeholder='z. B. „Probefahrt mit Rafael Huber morgen um 15 Uhr“'/>
+      <div className="voiceExamples">
+        <button onClick={()=>setText('Probefahrt mit Rafael Huber morgen um 15 Uhr')}>Probefahrt planen</button>
+        <button onClick={()=>setText('Rafael Huber nicht erreicht')}>Nicht erreicht</button>
+        <button onClick={()=>setText('Notiz bei Rafael Huber: Kunde möchte am Freitag entscheiden')}>Notiz speichern</button>
+        <button onClick={()=>setText('Öffne Rafael Huber')}>Kundenakte öffnen</button>
+      </div>
+      {result&&<div className="voiceResult">{result}</div>}
+      <div className="modalFoot voiceFoot"><span>AVA 0.6 verarbeitet noch ausgewählte Verkaufskommandos – keine Nachricht wird automatisch versendet.</span><div><button className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary" onClick={onRun}>Befehl ausführen</button></div></div>
+    </div>
   </div>;
 }
 

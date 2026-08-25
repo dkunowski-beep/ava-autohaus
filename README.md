@@ -1,15 +1,17 @@
-# AVA Alpha 0.5
+# AVA Alpha 0.6
 
-Frontend redesign.
+Voice Assistant milestone.
 
-- New modern desktop and mobile UI
-- Today cockpit with prioritized task cards
-- Task actions depend on task type
-- Customer details displayed on tasks and calendar entries
-- Modern customer cards with a real customer detail drawer
-- Full customer edit form, including every contract/date field
-- Redesigned day and week calendar
-- Technical stage values replaced by readable German labels
-- Existing Supabase login, database and workflow logic retained
+New:
+- functional AVA voice modal on desktop and mobile
+- browser microphone recognition in German where supported
+- typed fallback for browsers without speech recognition
+- voice command: schedule a test drive for an existing customer
+- calendar conflict detection remains active
+- automatic test-drive reminders remain active
+- voice command: customer not reached -> new contact attempt after two hours / next useful business time
+- voice command: save a customer note to history
+- voice command: open a customer record
+- commands can identify a customer by name or customer number
 
-Use fictional test data only during alpha.
+No messages are sent automatically. Use fictional test data only during alpha.
