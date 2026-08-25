@@ -1,12 +1,15 @@
-# AVA Alpha 0.4.2
+# AVA Alpha 0.5
 
-UI & workflow update:
-- modernized cards, buttons, spacing and responsive styling
-- customer names, customer numbers, phone and vehicle shown on tasks
-- calendar appointments show time and customer details
-- task-specific actions: test-drive preparation no longer shows “Nicht erreicht”
-- friendly customer status labels instead of technical database values
-- edit mode exposes all stored customer dates, including contract end
-- responsive desktop/mobile foundation
+Frontend redesign.
+
+- New modern desktop and mobile UI
+- Today cockpit with prioritized task cards
+- Task actions depend on task type
+- Customer details displayed on tasks and calendar entries
+- Modern customer cards with a real customer detail drawer
+- Full customer edit form, including every contract/date field
+- Redesigned day and week calendar
+- Technical stage values replaced by readable German labels
+- Existing Supabase login, database and workflow logic retained
 
 Use fictional test data only during alpha.
