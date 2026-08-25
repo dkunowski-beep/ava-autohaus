@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="brandMark">A</div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 0.6</div>
+      <div className="versionPill">Alpha 0.7</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -114,6 +114,11 @@ function Dashboard({session}){
   }
 
   useEffect(()=>{load()},[]);
+  useEffect(()=>{
+    const open=()=>{setVoiceOpen(true);setVoiceResult('')};
+    window.addEventListener('ava-open-voice',open);
+    return()=>window.removeEventListener('ava-open-voice',open);
+  },[]);
 
   const customerMap=useMemo(()=>Object.fromEntries(customers.map(c=>[c.id,c])),[customers]);
   const openTasks=useMemo(()=>tasks.filter(t=>t.status==='open'),[tasks]);
@@ -212,6 +217,15 @@ function Dashboard({session}){
   }
 
   function taskCustomer(t){return customerMap[t.customer_id]||null}
+  async function setEventStatus(event,status){
+    let reason=null;
+    if(status==='cancelled'){
+      reason=window.prompt('Optional: Warum hat der Kunde abgesagt?')||'Kunde hat abgesagt';
+    }
+    const {error}=await supabase.rpc('ava_set_event_status',{p_event_id:event.id,p_status:status,p_reason:reason});
+    if(error) alert(error.message); else await load();
+  }
+
 
   function findCustomerInSpeech(text){
     const q=text.toLowerCase();
@@ -318,9 +332,7 @@ function Dashboard({session}){
       {busy?<LoadingState/>:<>
         {tab==='Heute'&&<TodayView openTasks={openTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
         {tab==='Kunden'&&<CustomersView customers={filteredCustomers} search={search} setSearch={setSearch} onOpen={setDetail} onEdit={edit} onMail={openMail} onNew={fresh}/>}
-        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} week={week} setWeek={setWeek} onOpenCustomer={setDetail}/>}
-        {tab==='Historie'&&<HistoryView history={history} customerMap={customerMap}/>}
-        {tab==='Team'&&<TeamView email={session.user.email}/>}
+        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} week={week} setWeek={setWeek} onOpenCustomer={setDetail} onSetStatus={setEventStatus}/>}        {tab==='Team'&&<TeamView email={session.user.email}/>}
       </>}
     </main>
     <MobileNav tab={tab} setTab={setTab}/>
@@ -331,9 +343,9 @@ function Dashboard({session}){
 }
 
 function Sidebar({tab,setTab,email}){
-  const items=[['Heute','⌂'],['Kalender','▦'],['Kunden','◉'],['Historie','↺'],['Team','◇']];
+  const items=[['Heute','⌂'],['Kalender','▦'],['Kunden','◉'],['Team','◇']];
   return <aside className="sidebar">
-    <div className="sideBrand"><div className="brandMark small">A</div><div><b>AVA</b><span>Alpha 0.6</span></div></div>
+    <div className="sideBrand"><div className="brandMark small">A</div><div><b>AVA</b><span>Alpha 0.7</span></div></div>
     <nav className="sideNav">{items.map(([label,icon])=><button key={label} className={tab===label?'active':''} onClick={()=>setTab(label)}><span>{icon}</span>{label}</button>)}</nav>
     <div className="sideFoot"><div className="userDot">V</div><div className="userMeta"><b>Verkäufer</b><span>{email}</span></div><button className="iconButton" title="Abmelden" onClick={()=>supabase.auth.signOut()}>↗</button></div>
   </aside>;
@@ -431,35 +443,45 @@ function CustomerCard({c,onOpen,onEdit,onMail}){
   </article>;
 }
 
-function CalendarView({events,customerMap,week,setWeek,onOpenCustomer}){
+function CalendarView({events,customerMap,week,setWeek,onOpenCustomer,onSetStatus}){
   const today=new Date();
   const dayEvents=events.filter(e=>new Date(e.starts_at).toDateString()===today.toDateString());
   return <div className="page">
     <div className="pageTitleRow"><div><span className="eyebrow">Terminplanung</span><h1>Kalender</h1><p>Probefahrten, Auslieferungen und Verkaufsaufgaben mit Kundenkontext.</p></div><div className="segmented"><button className={!week?'active':''} onClick={()=>setWeek(false)}>Tag</button><button className={week?'active':''} onClick={()=>setWeek(true)}>Woche</button></div></div>
-    {!week?<DayCalendar events={dayEvents} customerMap={customerMap} onOpenCustomer={onOpenCustomer}/>:<WeekCalendar events={events} customerMap={customerMap} onOpenCustomer={onOpenCustomer}/>}
+    {!week?<DayCalendar events={dayEvents} customerMap={customerMap} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus}/>:<WeekCalendar events={events} customerMap={customerMap} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus}/>}
   </div>;
 }
 
-function DayCalendar({events,customerMap,onOpenCustomer}){
+function DayCalendar({events,customerMap,onOpenCustomer,onSetStatus}){
   return <div className="calendarSurface">
     <div className="calendarHeader"><div><span>Heute</span><b>{new Date().toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</b></div><span className="countPill">{events.length} Termine</span></div>
-    <div className="dayTimeline">{events.length?events.map(e=><CalendarEvent key={e.id} e={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer}/>):<EmptyState title="Keine Termine heute" text="Für heute ist aktuell nichts im Kalender eingetragen."/>}</div>
+    <div className="dayTimeline">{events.length?events.map(e=><CalendarEvent key={e.id} e={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus}/>):<EmptyState title="Keine Termine heute" text="Für heute ist aktuell nichts im Kalender eingetragen."/>}</div>
   </div>;
 }
 
-function CalendarEvent({e,customer,onOpenCustomer}){
-  return <div className="calendarEvent">
+function CalendarEvent({e,customer,onOpenCustomer,onSetStatus}){
+  const completed=e.status==='completed', cancelled=e.status==='cancelled';
+  return <div className={`calendarEvent ${completed?'eventCompleted':''} ${cancelled?'eventCancelled':''}`}>
     <div className="timeBlock"><b>{fmtTime(e.starts_at)}</b><span>bis {fmtTime(e.ends_at)}</span></div>
     <div className="eventAccent"/>
-    <div className="eventInfo"><span className="statusBadge blue">{e.event_type==='test_drive'?'Probefahrt':'Termin'}</span><h3>{e.title}</h3>{customer?<button className="customerLink" onClick={()=>onOpenCustomer(customer)}>{customer.name} · KD {customer.customer_number}</button>:<span className="muted">Kein Kunde zugeordnet</span>}<small>{customer?.phone||''}{customer?.phone&&' · '}{e.vehicle||customer?.vehicle_interest||''}</small></div>
+    <div className="eventInfo">
+      <div className="eventStatusRow">
+        <span className={`statusBadge ${completed?'green':cancelled?'neutral':'blue'}`}>{completed?'✓ Probefahrt erfolgt':cancelled?'Abgesagt':e.event_type==='test_drive'?'Probefahrt':'Termin'}</span>
+      </div>
+      <h3>{e.title}</h3>
+      {customer?<button className="customerLink" onClick={()=>onOpenCustomer(customer)}>{customer.name} · KD {customer.customer_number}</button>:<span className="muted">Kein Kunde zugeordnet</span>}
+      <small>{customer?.phone||''}{customer?.phone&&' · '}{e.vehicle||customer?.vehicle_interest||''}</small>
+      {cancelled&&e.cancelled_reason&&<small className="cancelReason">Grund: {e.cancelled_reason}</small>}
+      {e.event_type==='test_drive'&&!completed&&!cancelled&&<div className="eventActions"><button className="btn primary" onClick={()=>onSetStatus(e,'completed')}>✓ Probefahrt erfolgt</button><button className="btn soft" onClick={()=>onSetStatus(e,'cancelled')}>Kunde hat abgesagt</button></div>}
+    </div>
   </div>;
 }
 
-function WeekCalendar({events,customerMap,onOpenCustomer}){
+function WeekCalendar({events,customerMap,onOpenCustomer,onSetStatus}){
   const days=[0,1,2,3,4,5].map(offset=>{const d=new Date();const dow=d.getDay();const monday=new Date(d);monday.setDate(d.getDate()-((dow+6)%7)+offset);monday.setHours(0,0,0,0);return monday});
   return <div className="weekBoard">{days.map(d=>{
     const es=events.filter(e=>new Date(e.starts_at).toDateString()===d.toDateString());
-    return <div className="weekColumn" key={d.toISOString()}><div className="weekHead"><span>{d.toLocaleDateString('de-DE',{weekday:'short'})}</span><b>{d.getDate()}</b></div><div className="weekEvents">{es.map(e=>{const c=customerMap[e.customer_id];return <button key={e.id} className="weekEvent" onClick={()=>c&&onOpenCustomer(c)}><b>{fmtTime(e.starts_at)}</b><span>{e.title}</span><small>{c?.name||e.vehicle||''}</small></button>})}{!es.length&&<div className="weekEmpty">frei</div>}</div></div>
+    return <div className="weekColumn" key={d.toISOString()}><div className="weekHead"><span>{d.toLocaleDateString('de-DE',{weekday:'short'})}</span><b>{d.getDate()}</b></div><div className="weekEvents">{es.map(e=>{const c=customerMap[e.customer_id];return <button key={e.id} className="weekEvent" onClick={()=>c&&onOpenCustomer(c)}><b>{fmtTime(e.starts_at)}</b><span>{e.status==='completed'?'✓ ':e.status==='cancelled'?'× ':''}{e.title}</span><small>{c?.name||e.vehicle||''}</small></button>})}{!es.length&&<div className="weekEmpty">frei</div>}</div></div>
   })}</div>;
 }
 
@@ -553,8 +575,8 @@ function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
 }
 
 function MobileNav({tab,setTab}){
-  const items=[['Heute','⌂'],['Kalender','▦'],['Kunden','◉'],['Historie','↺'],['Team','◇']];
-  return <nav className="mobileNav">{items.map(([l,i])=><button key={l} className={tab===l?'active':''} onClick={()=>setTab(l)}><span>{i}</span>{l}</button>)}</nav>;
+  const items=[['Heute','⌂'],['Kalender','▦'],['Kunden','◉'],['Team','◇']];
+  return <nav className="mobileNav">{items.slice(0,2).map(([l,i])=><button key={l} className={tab===l?'active':''} onClick={()=>setTab(l)}><span>{i}</span>{l}</button>)}<button className="mobileVoice" onClick={()=>window.dispatchEvent(new CustomEvent('ava-open-voice'))}><span>🎙</span>AVA</button>{items.slice(2).map(([l,i])=><button key={l} className={tab===l?'active':''} onClick={()=>setTab(l)}><span>{i}</span>{l}</button>)}</nav>;
 }
 
 function Metric({n,label,sub}){return <div className="metric"><div className="metricNumber">{n}</div><b>{label}</b><span>{sub}</span></div>}

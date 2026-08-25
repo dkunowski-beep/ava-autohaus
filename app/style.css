@@ -53,3 +53,12 @@
 .voiceResult{margin-top:14px;background:#edf4ff;color:#244d92;border:1px solid #d9e7ff;border-radius:12px;padding:12px;font-size:11px;line-height:1.5}
 .voiceFoot{margin-top:18px}
 @media(max-width:760px){.voiceModal{padding:18px;border-radius:19px}.voiceExamples{grid-template-columns:1fr}.voiceOrb{width:76px;height:76px;margin-top:20px}}
+
+/* AVA 0.7 */
+.eventCompleted{background:#fbfffc}.eventCompleted .eventAccent{background:#1f8a57}.eventCancelled{opacity:.72;background:#fafafa}.eventCancelled .eventAccent{background:#aeb4ba}
+.eventStatusRow{display:flex;align-items:center;gap:8px}.eventActions{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}.eventActions .btn{font-size:10px;padding:8px 10px}.cancelReason{color:#8a4b44!important;margin-top:5px}
+@media(max-width:760px){
+  .mobileNav{grid-template-columns:1fr 1fr 74px 1fr 1fr;height:70px}
+  .mobileVoice{position:relative!important;background:#111418!important;color:#fff!important;width:58px!important;height:58px!important;border-radius:50%!important;align-self:center;justify-self:center;margin-top:-22px;box-shadow:0 10px 28px #0003}
+  .mobileVoice span{font-size:22px!important}.mobileVoice{font-size:9px!important;font-weight:900!important}
+}
