@@ -29,7 +29,7 @@ function Login(){
    setMsg(error?error.message:'Angemeldet.');
   }
  }
- return <div className="auth"><div className="authbox"><div className="logo">AVA <span>Alpha 0.4</span></div><h1>{mode==='login'?'Anmelden':'Verkäuferkonto erstellen'}</h1><p>Autohaus Vertriebs Assistent</p>
+ return <div className="auth"><div className="authbox"><div className="logo">AVA <span>Alpha 0.4.1</span></div><h1>{mode==='login'?'Anmelden':'Verkäuferkonto erstellen'}</h1><p>Autohaus Vertriebs Assistent</p>
  <form onSubmit={submit}>{mode==='register'&&<input required placeholder="Name" value={name} onChange={e=>setName(e.target.value)}/>}<input required type="email" placeholder="E-Mail" value={email} onChange={e=>setEmail(e.target.value)}/><input required minLength="6" type="password" placeholder="Passwort" value={password} onChange={e=>setPassword(e.target.value)}/><button>{mode==='login'?'Anmelden':'Registrieren'}</button></form>
  {msg&&<div className="msg">{msg}</div>}<button className="link" onClick={()=>{setMode(mode==='login'?'register':'login');setMsg('')}}>{mode==='login'?'Noch kein Testkonto? Registrieren':'Zur Anmeldung'}</button></div></div>
 }
@@ -51,10 +51,43 @@ function Dashboard({session}){
  }
  useEffect(()=>{load()},[]);
  async function saveCustomer(e){e.preventDefault();
-  const payload={...form,owner_id:uid};
-  let res=selected?await supabase.from('ava_customers').update(payload).eq('id',selected.id).select().single():await supabase.from('ava_customers').insert(payload).select().single();
+  const cleanDate=v=>v&&String(v).trim()?v:null;
+  const cleanDateTime=v=>v&&String(v).trim()?new Date(v).toISOString():null;
+  const payload={
+    name:form.name,
+    customer_number:form.customer_number,
+    phone:form.phone||null,
+    email:form.email||null,
+    vehicle_interest:form.vehicle_interest||null,
+    stage:form.stage,
+    notes:form.notes||null,
+    contract_end_date:cleanDate(form.contract_end_date),
+    ordered_at:cleanDate(form.ordered_at),
+    delivered_at:cleanDate(form.delivered_at),
+    test_drive_at:cleanDateTime(form.test_drive_at),
+    planned_delivery_at:cleanDateTime(form.planned_delivery_at),
+    owner_id:uid
+  };
+  let res=selected
+    ?await supabase.from('ava_customers').update(payload).eq('id',selected.id).select().single()
+    :await supabase.from('ava_customers').insert(payload).select().single();
   if(res.error){alert(res.error.message);return}
   await supabase.from('ava_history').insert({customer_id:res.data.id,actor_id:uid,action:selected?'Kundendaten geändert':'Kunde angelegt',details:`${res.data.name} · ${res.data.vehicle_interest||''}`});
+  if(form.stage==='test_drive'&&form.test_drive_at){
+    const {error}=await supabase.rpc('ava_schedule_test_drive',{
+      p_customer_id:res.data.id,
+      p_starts_at:new Date(form.test_drive_at).toISOString(),
+      p_minutes:60,
+      p_vehicle:form.vehicle_interest||''
+    });
+    if(error){
+      alert(error.message.includes('TERMIN_CONFLICT')
+        ?'Kunde wurde gespeichert, aber die Probefahrt überschneidet sich mit einem bestehenden Termin. Bitte den Termin beim Kunden ändern.'
+        :'Kunde wurde gespeichert, aber die Probefahrt konnte nicht geplant werden: '+error.message);
+    }else{
+      await supabase.from('ava_history').insert({customer_id:res.data.id,actor_id:uid,action:'Probefahrt automatisch geplant',details:new Date(form.test_drive_at).toLocaleString('de-DE')+' · Erinnerungen 1 Tag / 1 Stunde vorher + Nachkontakt +2 Tage'});
+    }
+  }
   closeForm();load();
  }
  function edit(c){setSelected(c);setForm({name:c.name||'',customer_number:c.customer_number||'',phone:c.phone||'',email:c.email||'',vehicle_interest:c.vehicle_interest||'',stage:c.stage||'lead',notes:c.notes||'',contract_end_date:c.contract_end_date||'',ordered_at:c.ordered_at||'',delivered_at:c.delivered_at||'',test_drive_at:c.test_drive_at?c.test_drive_at.slice(0,16):'',planned_delivery_at:c.planned_delivery_at?c.planned_delivery_at.slice(0,16):''});setShowForm(true)}
@@ -86,7 +119,7 @@ function Dashboard({session}){
  const openTasks=tasks.filter(t=>t.status==='open');
 
  return <main className="shell">
-  <aside><div className="logo">AVA <span>0.4</span></div>{['Heute','Kalender','Kunden','Historie','Team'].map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x}</button>)}<div className="asideBottom"><small>{session.user.email}</small><button onClick={()=>supabase.auth.signOut()}>Abmelden</button></div></aside>
+  <aside><div className="logo">AVA <span>0.4.1</span></div>{['Heute','Kalender','Kunden','Historie','Team'].map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x}</button>)}<div className="asideBottom"><small>{session.user.email}</small><button onClick={()=>supabase.auth.signOut()}>Abmelden</button></div></aside>
   <section className="content"><header><div><b>{tab}</b><p>Autohaus Vertriebs Assistent · Supabase verbunden</p></div><div className="headActions"><button onClick={fresh}>+ Kunde</button><button className="dark" onClick={()=>alert('Sprachsteuerung kommt als nächster Schritt.')}>🎙️ AVA</button></div></header>
   {busy?<p>Lade AVA-Daten…</p>:<>
    {tab==='Heute'&&<><h1>Dein Verkaufstag</h1><div className="stats"><Stat n={openTasks.length} t="Offene Aufgaben"/><Stat n={events.length} t="Termine"/><Stat n={customers.length} t="Kunden"/><Stat n={contractAlerts.length} t="6-Monats-Chancen"/></div>{contractAlerts.length>0&&<><h2>Vertragsende in ca. 6 Monaten</h2>{contractAlerts.map(c=><div className="panel" key={'alert'+c.id}><div><b>{c.name} · KD {c.customer_number}</b><p>{c.vehicle_interest} · Vertragsende {new Date(c.contract_end_date+'T12:00:00').toLocaleDateString('de-DE')}</p></div><button onClick={()=>quickWorkflow(c,'offer')}>Kontakt planen</button></div>)}</>}<h2>Offene Aufgaben</h2>{openTasks.length?openTasks.slice(0,8).map(t=><Task key={t.id} t={t} toggle={()=>toggleTask(t)} contact={(ok)=>contactAttempt(t,ok)}/>):<Empty text="Noch keine Aufgaben. Sobald wir die Automatik aktivieren, erscheinen hier Follow-ups."/ >}</>}
