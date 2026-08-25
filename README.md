@@ -1,9 +1,12 @@
-# AVA Alpha 0.4.1
+# AVA Alpha 0.4.2
 
-Bugfix:
-- empty date fields are stored as NULL instead of empty strings
-- creating/saving a customer with status Probefahrt automatically schedules the test drive
-- test-drive scheduling creates the 1-day and 1-hour preparation reminders plus the 2-day follow-up
-- scheduling still checks calendar conflicts
+UI & workflow update:
+- modernized cards, buttons, spacing and responsive styling
+- customer names, customer numbers, phone and vehicle shown on tasks
+- calendar appointments show time and customer details
+- task-specific actions: test-drive preparation no longer shows “Nicht erreicht”
+- friendly customer status labels instead of technical database values
+- edit mode exposes all stored customer dates, including contract end
+- responsive desktop/mobile foundation
 
 Use fictional test data only during alpha.
