@@ -1,12 +1,13 @@
-# AVA Alpha 0.3
-Supabase-connected sales workflow test.
+# AVA Alpha 0.4
 
 New:
-- Follow-up buttons: offer +2 days, test drive +2 days, delivery +1 day
-- delivery status +3 weeks
-- contract-end date and six-month opportunity display
-- unsuccessful contact creates a retry after two hours with business-hour adjustment
-- successful/unsuccessful contact is written to history
+- clearly labelled dynamic date fields based on customer status
+- test-drive date/time
+- order date / planned delivery only for ordered vehicles
+- delivery / contract-end dates only for existing customers
+- real test-drive event creation
+- calendar conflict detection
+- automatic test-drive reminders 1 day and 1 hour before
+- automatic test-drive follow-up 2 days after
 
-Use fictional test data only.
-Deployment trigger for AVA 0.3
+Use fictional test data only during alpha.
