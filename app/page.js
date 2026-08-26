@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {createClient} from '@supabase/supabase-js';
 
 const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 0.7.1</div>
+      <div className="versionPill">Alpha 0.8</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -98,7 +98,8 @@ function Dashboard({session}){
   const [voiceText,setVoiceText]=useState('');
   const [voiceResult,setVoiceResult]=useState('');
   const [voiceListening,setVoiceListening]=useState(false);
-  const emptyForm={name:'',customer_number:'',phone:'',email:'',vehicle_interest:'',stage:'lead',notes:'',contract_end_date:'',ordered_at:'',delivered_at:'',test_drive_at:'',planned_delivery_at:''};
+  const recognitionRef=useRef(null);
+  const emptyForm={name:'',customer_number:'',phone:'',email:'',vehicle_interest:'',purchased_vehicle:'',stage:'lead',notes:'',contract_end_date:'',ordered_at:'',delivered_at:'',test_drive_at:'',planned_delivery_at:''};
   const [form,setForm]=useState(emptyForm);
 
   async function load(){
@@ -141,7 +142,7 @@ function Dashboard({session}){
   function edit(c){
     setSelected(c);
     setForm({
-      name:c.name||'',customer_number:c.customer_number||'',phone:c.phone||'',email:c.email||'',vehicle_interest:c.vehicle_interest||'',
+      name:c.name||'',customer_number:c.customer_number||'',phone:c.phone||'',email:c.email||'',vehicle_interest:c.vehicle_interest||'',purchased_vehicle:c.purchased_vehicle||'',
       stage:c.stage||'lead',notes:c.notes||'',contract_end_date:c.contract_end_date||'',ordered_at:c.ordered_at||'',delivered_at:c.delivered_at||'',
       test_drive_at:c.test_drive_at?c.test_drive_at.slice(0,16):'',planned_delivery_at:c.planned_delivery_at?c.planned_delivery_at.slice(0,16):''
     });
@@ -151,11 +152,15 @@ function Dashboard({session}){
 
   async function saveCustomer(e){
     e.preventDefault();
+    if(['ordered','customer'].includes(form.stage)&&!form.customer_number.trim()){
+      alert('Der Kunde hat gekauft. Bitte jetzt eine Kundennummer eintragen.');
+      return;
+    }
     const cleanDate=v=>v&&String(v).trim()?v:null;
     const cleanDateTime=v=>v&&String(v).trim()?new Date(v).toISOString():null;
     const payload={
-      name:form.name,customer_number:form.customer_number,phone:form.phone||null,email:form.email||null,
-      vehicle_interest:form.vehicle_interest||null,stage:form.stage,notes:form.notes||null,
+      name:form.name,customer_number:form.customer_number||null,phone:form.phone||null,email:form.email||null,
+      vehicle_interest:form.vehicle_interest||null,purchased_vehicle:form.purchased_vehicle||null,stage:form.stage,customer_kind:['ordered','customer'].includes(form.stage)?'buyer':'prospect',notes:form.notes||null,
       contract_end_date:cleanDate(form.contract_end_date),ordered_at:cleanDate(form.ordered_at),delivered_at:cleanDate(form.delivered_at),
       test_drive_at:cleanDateTime(form.test_drive_at),planned_delivery_at:cleanDateTime(form.planned_delivery_at),owner_id:uid
     };
@@ -222,7 +227,9 @@ function Dashboard({session}){
     if(status==='cancelled'){
       reason=window.prompt('Optional: Warum hat der Kunde abgesagt?')||'Kunde hat abgesagt';
     }
-    const {error}=await supabase.rpc('ava_set_event_status',{p_event_id:event.id,p_status:status,p_reason:reason});
+    const {error}=status==='cancelled'
+      ?await supabase.rpc('ava_cancel_test_drive',{p_event_id:event.id,p_reason:reason})
+      :await supabase.rpc('ava_set_event_status',{p_event_id:event.id,p_status:status,p_reason:reason});
     if(error) alert(error.message); else await load();
   }
 
@@ -266,23 +273,74 @@ function Dashboard({session}){
     return d;
   }
 
+  function stopVoice(){
+    try{
+      if(recognitionRef.current){
+        recognitionRef.current.onend=null;
+        recognitionRef.current.onerror=null;
+        recognitionRef.current.onresult=null;
+        recognitionRef.current.stop();
+      }
+    }catch(_e){}
+    recognitionRef.current=null;
+    setVoiceListening(false);
+  }
+
   function startVoice(){
+    stopVoice();
     setVoiceResult('');
     const SR=typeof window!=='undefined'&&(window.SpeechRecognition||window.webkitSpeechRecognition);
     if(!SR){setVoiceResult('Dein Browser unterstützt die direkte Spracherkennung hier nicht. Du kannst den Befehl unten eintippen.');return}
-    const rec=new SR(); rec.lang='de-DE';rec.interimResults=false;rec.maxAlternatives=1;
+    const rec=new SR();
+    recognitionRef.current=rec;
+    rec.lang='de-DE';rec.interimResults=false;rec.maxAlternatives=1;rec.continuous=false;
     rec.onstart=()=>setVoiceListening(true);
-    rec.onend=()=>setVoiceListening(false);
-    rec.onerror=()=>{setVoiceListening(false);setVoiceResult('Mikrofon konnte nicht verwendet werden. Du kannst den Befehl auch eintippen.')};
-    rec.onresult=e=>setVoiceText(e.results[0][0].transcript);
+    rec.onresult=e=>{setVoiceText(e.results[0][0].transcript);setTimeout(stopVoice,50)};
+    rec.onerror=()=>{setVoiceResult('Mikrofon konnte nicht verwendet werden. Du kannst den Befehl auch eintippen.');stopVoice()};
+    rec.onend=()=>{recognitionRef.current=null;setVoiceListening(false)};
     rec.start();
   }
+
+  function parseNewProspect(text){
+    const q=text.trim();
+    const phone=(q.match(/(?:\+49|0)[\d\s\/-]{7,}/)||[])[0]?.trim()||'';
+    const email=(q.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)||[])[0]||'';
+    let name='';
+    const nm=q.match(/(?:neuer?|neue)\s+(?:interessent(?:in)?|kunde|kundin)\s+([^,]+?)(?=\s+(?:telefon|handy|tel\.?|möchte|moechte|will|interessiert)|,|$)/i);
+    if(nm) name=nm[1].trim();
+    let vehicle='';
+    const vm=q.match(/(?:möchte|moechte|will)\s+(?:einen?|eine)?\s*([^,.]+?)\s+(?:probe\s*fahren|probefahren|zur probefahrt)/i)
+      || q.match(/(?:interesse(?: an)?|interessiert sich für|interessiert sich fuer)\s+(?:einen?|eine)?\s*([^,.]+)/i);
+    if(vm) vehicle=vm[1].trim();
+    return {name,phone,email,vehicle};
+  }
+
 
   async function runVoiceCommand(){
     const text=voiceText.trim();
     if(!text){setVoiceResult('Bitte sprich oder tippe zuerst einen Befehl ein.');return}
     const q=text.toLowerCase();
     const c=findCustomerInSpeech(text);
+
+    if((q.includes('neuer interessent')||q.includes('neue interessentin')||q.includes('neuer kunde')||q.includes('neue kundin'))){
+      const parsed=parseNewProspect(text);
+      if(!parsed.name){setVoiceResult('Den Namen konnte ich nicht eindeutig erkennen. Beispiel: „Neuer Interessent Thomas Berger, möchte einen CX-5 probefahren, Freitag um 14 Uhr.“');return}
+      const duplicate=customers.find(x=>(parsed.phone&&x.phone===parsed.phone)||(parsed.email&&x.email?.toLowerCase()===parsed.email.toLowerCase())||(x.name||'').toLowerCase()===parsed.name.toLowerCase());
+      if(duplicate){setVoiceResult(`Möglicher vorhandener Kunde gefunden: ${duplicate.name}. Bitte öffne zuerst die Kundenakte, damit kein doppelter Datensatz entsteht.`);return}
+      const when=q.includes('probefahrt')||q.includes('probefahren')?parseSpeechDate(text):null;
+      if((q.includes('probefahrt')||q.includes('probefahren'))&&!when){setVoiceResult(`Interessent erkannt: ${parsed.name}. Den Probefahrt-Termin konnte ich noch nicht eindeutig erkennen.`);return}
+      const {data,error}=await supabase.rpc('ava_create_prospect_with_test_drive',{
+        p_name:parsed.name,p_phone:parsed.phone||null,p_email:parsed.email||null,p_vehicle:parsed.vehicle||null,p_starts_at:when?when.toISOString():null
+      });
+      if(error){setVoiceResult(error.message.includes('TERMIN_CONFLICT')?'Terminüberschneidung erkannt. Der Interessent wurde nicht angelegt. Bitte nenne einen anderen Zeitpunkt.':error.message)}
+      else{
+        setVoiceResult(when
+          ?`${parsed.name} wurde als Interessent angelegt. Probefahrt: ${when.toLocaleString('de-DE')}. Erinnerungen und Nachkontakt sind geplant.`
+          :`${parsed.name} wurde als Interessent angelegt.`);
+        await load();
+      }
+      return;
+    }
 
     if((q.includes('öffne')||q.includes('oeffne')||q.includes('zeige'))&&c){
       setDetail(c);setVoiceOpen(false);setVoiceResult('');return;
@@ -322,7 +380,7 @@ function Dashboard({session}){
       return;
     }
 
-    setVoiceResult('Diesen Befehl versteht AVA 0.6 noch nicht. Unterstützt werden aktuell: Probefahrt planen, Kunde nicht erreicht, Sprachnotiz und Kundenakte öffnen.');
+    setVoiceResult('Diesen Befehl versteht AVA 0.8 noch nicht. Unterstützt werden aktuell: Probefahrt planen, Kunde nicht erreicht, Sprachnotiz und Kundenakte öffnen.');
   }
 
   return <div className="appShell">
@@ -338,7 +396,7 @@ function Dashboard({session}){
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
     {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)}/>}
-    {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} onListen={startVoice} onRun={runVoiceCommand} onClose={()=>{setVoiceOpen(false);setVoiceListening(false)}}/>}
+    {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} onListen={startVoice} onRun={runVoiceCommand} onClose={()=>{stopVoice();setVoiceOpen(false)}}/>}
   </div>;
 }
 
@@ -400,7 +458,7 @@ function TaskCard({task,customer,onReached,onNotReached,onDone,onOpenCustomer}){
     <div className="taskIcon">{prep?'🚗':'☎'}</div>
     <div className="taskMain">
       <div className="taskTop"><div><span className={`statusBadge ${prep?'blue':'neutral'}`}>{prep?'Probefahrt':'Kontakt'}</span><b>{task.title}</b></div><span className="due">{fmtDateTime(task.due_at)}</span></div>
-      {customer?<button className="customerLink" onClick={()=>onOpenCustomer(customer)}>{customer.name} · KD {customer.customer_number} · {customer.phone||'keine Tel.'} · {customer.vehicle_interest||'kein Fahrzeug'}</button>:<span className="muted">{task.details||'Kein Kunde zugeordnet'}</span>}
+      {customer?<button className="customerLink" onClick={()=>onOpenCustomer(customer)}>{customer.name} · {customer.customer_number?`KD ${customer.customer_number} · `:''}{customer.phone||'keine Tel.'} · {customer.vehicle_interest||'kein Fahrzeug'}</button>:<span className="muted">{task.details||'Kein Kunde zugeordnet'}</span>}
       <div className="taskActions">
         <button className="btn primary" onClick={onReached}>{prep?'✓ Fahrzeug vorbereitet':'✓ Erreicht'}</button>
         {contact&&<button className="btn soft" onClick={onNotReached}>Nicht erreicht</button>}
@@ -414,7 +472,7 @@ function AgendaItem({event,customer,onOpenCustomer}){
   return <div className="agendaItem">
     <div className="agendaTime">{fmtTime(event.starts_at)}</div>
     <div className="agendaLine"/>
-    <div className="agendaBody"><b>{event.title}</b>{customer?<button onClick={()=>onOpenCustomer(customer)}>{customer.name} · KD {customer.customer_number}</button>:<span>Kein Kunde</span>}<small>{event.vehicle||customer?.vehicle_interest||''}</small></div>
+    <div className="agendaBody"><b>{event.title}</b>{customer?<button onClick={()=>onOpenCustomer(customer)}>{customer.name}{customer.customer_number?` · KD ${customer.customer_number}`:''}</button>:<span>Kein Kunde</span>}<small>{event.vehicle||customer?.vehicle_interest||''}</small></div>
   </div>;
 }
 
@@ -431,7 +489,7 @@ function CustomersView({customers,search,setSearch,onOpen,onEdit,onMail,onNew}){
 function CustomerCard({c,onOpen,onEdit,onMail}){
   const stage=STAGES[c.stage]||STAGES.lead;
   return <article className="customerCard">
-    <div className="customerHead"><div className="avatar">{initials(c.name)}</div><div className="customerIdentity"><b>{c.name}</b><span>KD {c.customer_number}</span></div><span className={`statusBadge ${stage.tone}`}>{stage.label}</span></div>
+    <div className="customerHead"><div className="avatar">{initials(c.name)}</div><div className="customerIdentity"><b>{c.name}</b><span>{c.customer_number?`KD ${c.customer_number}`:'Interessent · noch keine Kundennummer'}</span></div><span className={`statusBadge ${stage.tone}`}>{stage.label}</span></div>
     <div className="vehicleLine"><span>Fahrzeug</span><b>{c.vehicle_interest||'Noch nicht hinterlegt'}</b></div>
     <div className="customerFacts">
       <div><span>Telefon</span><b>{c.phone||'—'}</b></div>
@@ -469,7 +527,7 @@ function CalendarEvent({e,customer,onOpenCustomer,onSetStatus}){
         <span className={`statusBadge ${completed?'green':cancelled?'neutral':'blue'}`}>{completed?'✓ Probefahrt erfolgt':cancelled?'Abgesagt':e.event_type==='test_drive'?'Probefahrt':'Termin'}</span>
       </div>
       <h3>{e.title}</h3>
-      {customer?<button className="customerLink" onClick={()=>onOpenCustomer(customer)}>{customer.name} · KD {customer.customer_number}</button>:<span className="muted">Kein Kunde zugeordnet</span>}
+      {customer?<button className="customerLink" onClick={()=>onOpenCustomer(customer)}>{customer.name}{customer.customer_number?` · KD ${customer.customer_number}`:''}</button>:<span className="muted">Kein Kunde zugeordnet</span>}
       <small>{customer?.phone||''}{customer?.phone&&' · '}{e.vehicle||customer?.vehicle_interest||''}</small>
       {cancelled&&e.cancelled_reason&&<small className="cancelReason">Grund: {e.cancelled_reason}</small>}
       {e.event_type==='test_drive'&&!completed&&!cancelled&&<div className="eventActions"><button className="btn primary" onClick={()=>onSetStatus(e,'completed')}>✓ Probefahrt erfolgt</button><button className="btn soft" onClick={()=>onSetStatus(e,'cancelled')}>Kunde hat abgesagt</button></div>}
@@ -503,10 +561,10 @@ function CustomerDetail({customer,history,tasks,onClose,onEdit,onMail,onQuick}){
   const stage=STAGES[customer.stage]||STAGES.lead;
   return <div className="drawerBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
     <aside className="drawer">
-      <div className="drawerHead"><div><span className={`statusBadge ${stage.tone}`}>{stage.label}</span><h2>{customer.name}</h2><p>Kundennummer {customer.customer_number}</p></div><button className="closeButton" onClick={onClose}>×</button></div>
+      <div className="drawerHead"><div><span className={`statusBadge ${stage.tone}`}>{stage.label}</span><h2>{customer.name}</h2><p>{customer.customer_number?`Kundennummer ${customer.customer_number}`:'Interessent · Kundennummer folgt beim Kauf'}</p></div><button className="closeButton" onClick={onClose}>×</button></div>
       <div className="drawerActions"><button className="btn primary" onClick={onEdit}>Bearbeiten</button><button className="btn soft" onClick={onMail}>E-Mail erstellen</button></div>
       <DetailSection title="Kontakt"><DetailRow label="Telefon" value={customer.phone}/><DetailRow label="E-Mail" value={customer.email}/></DetailSection>
-      <DetailSection title="Fahrzeug"><DetailRow label="Interesse / Fahrzeug" value={customer.vehicle_interest}/><DetailRow label="Notizen" value={customer.notes}/></DetailSection>
+      <DetailSection title="Fahrzeug"><DetailRow label="Fahrzeuginteresse" value={customer.vehicle_interest}/><DetailRow label="Gekauftes Fahrzeug" value={customer.purchased_vehicle}/><DetailRow label="Notizen" value={customer.notes}/></DetailSection>
       <DetailSection title="Termine & Vertrag">
         <DetailRow label="Probefahrt" value={customer.test_drive_at?fmtDateTime(customer.test_drive_at):null}/>
         <DetailRow label="Bestelldatum" value={customer.ordered_at?fmtDate(customer.ordered_at):null}/>
@@ -520,11 +578,18 @@ function CustomerDetail({customer,history,tasks,onClose,onEdit,onMail,onQuick}){
       <DetailSection title="Offene Aufgaben">
         {tasks.filter(t=>t.status==='open').length?tasks.filter(t=>t.status==='open').map(t=><div className="miniTask" key={t.id}><b>{t.title}</b><span>{fmtDateTime(t.due_at)}</span></div>):<span className="muted">Keine offenen Aufgaben</span>}
       </DetailSection>
-      <DetailSection title="Letzte Historie">
-        {history.slice(0,5).map(h=><div className="miniHistory" key={h.id}><b>{h.action}</b><span>{fmtDateTime(h.created_at)}</span></div>)}
-      </DetailSection>
+      <HistoryButton history={history}/>
+
     </aside>
   </div>;
+}
+
+function HistoryButton({history}){
+  const [open,setOpen]=useState(false);
+  return <DetailSection title="Historie">
+    <button className="historyOpenBtn" onClick={()=>setOpen(true)}>Historie öffnen <span>{history.length}</span></button>
+    {open&&<div className="historyOverlay"><div className="historyPanel"><div className="modalHead"><div><span className="eyebrow">Kundenhistorie</span><h2>Alle Vorgänge</h2></div><button className="closeButton" onClick={()=>setOpen(false)}>×</button></div><div className="historyList">{history.length?history.map(h=><div className="historyListItem" key={h.id}><div><b>{h.action}</b><span>{fmtDateTime(h.created_at)}</span></div><p>{h.details}</p></div>):<span className="muted">Noch keine Historieneinträge.</span>}</div></div></div>}
+  </DetailSection>;
 }
 
 function CustomerForm({selected,form,setForm,onClose,onSubmit}){
@@ -534,10 +599,11 @@ function CustomerForm({selected,form,setForm,onClose,onSubmit}){
       <div className="modalHead"><div><span className="eyebrow">{selected?'Kundenakte':'Neuer Datensatz'}</span><h2>{selected?'Kunde bearbeiten':'Testkunde anlegen'}</h2><p>Alle gespeicherten Daten bleiben jederzeit bearbeitbar.</p></div><button type="button" className="closeButton" onClick={onClose}>×</button></div>
       <div className="formSection"><h3>Stammdaten</h3><div className="formGrid">
         <Field label="Name"><input required value={form.name} onChange={e=>set('name',e.target.value)}/></Field>
-        <Field label="Kundennummer"><input required value={form.customer_number} onChange={e=>set('customer_number',e.target.value)}/></Field>
+        <Field label="Kundennummer" hint="Bei Interessenten optional. AVA fordert sie beim Kauf an."><input value={form.customer_number} onChange={e=>set('customer_number',e.target.value)}/></Field>
         <Field label="Telefon"><input value={form.phone} onChange={e=>set('phone',e.target.value)}/></Field>
         <Field label="E-Mail"><input type="email" value={form.email} onChange={e=>set('email',e.target.value)}/></Field>
-        <Field label="Fahrzeug / Interesse" full><input value={form.vehicle_interest} onChange={e=>set('vehicle_interest',e.target.value)}/></Field>
+        <Field label="Fahrzeuginteresse" full><input value={form.vehicle_interest} onChange={e=>set('vehicle_interest',e.target.value)}/></Field>
+        <Field label="Gekauftes Fahrzeug" hint="Erst relevant, sobald der Interessent kauft." full><input value={form.purchased_vehicle||''} onChange={e=>set('purchased_vehicle',e.target.value)}/></Field>
         <Field label="Kundenstatus" hint="Der Status steuert AVAs Automatik." full><select value={form.stage} onChange={e=>set('stage',e.target.value)}>{Object.entries(STAGES).map(([k,v])=><option value={k} key={k}>{v.label}</option>)}</select></Field>
       </div></div>
 
@@ -563,13 +629,14 @@ function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
       <div className="voiceStatus">{listening?'Ich höre zu…':'Mikrofon antippen oder Befehl eintippen'}</div>
       <textarea className="voiceInput" value={text} onChange={e=>setText(e.target.value)} placeholder='z. B. „Probefahrt mit Rafael Huber morgen um 15 Uhr“'/>
       <div className="voiceExamples">
+        <button onClick={()=>setText('Neuer Interessent Thomas Berger, Telefon 0176 12345678, möchte einen CX-5 probefahren, Freitag um 14 Uhr')}>Interessent + Probefahrt</button>
         <button onClick={()=>setText('Probefahrt mit Rafael Huber morgen um 15 Uhr')}>Probefahrt planen</button>
         <button onClick={()=>setText('Rafael Huber nicht erreicht')}>Nicht erreicht</button>
         <button onClick={()=>setText('Notiz bei Rafael Huber: Kunde möchte am Freitag entscheiden')}>Notiz speichern</button>
         <button onClick={()=>setText('Öffne Rafael Huber')}>Kundenakte öffnen</button>
       </div>
       {result&&<div className="voiceResult">{result}</div>}
-      <div className="modalFoot voiceFoot"><span>AVA 0.6 verarbeitet noch ausgewählte Verkaufskommandos – keine Nachricht wird automatisch versendet.</span><div><button className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary" onClick={onRun}>Befehl ausführen</button></div></div>
+      <div className="modalFoot voiceFoot"><span>AVA 0.8 verarbeitet ausgewählte Verkaufskommandos – keine Nachricht wird automatisch versendet.</span><div><button className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary" onClick={onRun}>Befehl ausführen</button></div></div>
     </div>
   </div>;
 }

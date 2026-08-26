@@ -91,3 +91,19 @@ body{background:var(--ava-bg)}
 .mobileNav{background:rgba(255,255,255,.95);box-shadow:0 -8px 30px rgba(18,34,52,.08)}
 .mobileVoice{background:radial-gradient(circle at 35% 30%,#34a3ff,#0b6cff 45%,#08254b 78%,#041326)!important;box-shadow:0 12px 30px rgba(11,108,255,.35)!important}
 @media(max-width:760px){.topbar{margin:0 -14px;padding:0 14px}}
+
+/* AVA 0.8 */
+.historyOpenBtn{width:100%;border:1px solid var(--line);background:#f2f6fb;border-radius:12px;padding:12px 13px;display:flex;align-items:center;justify-content:space-between;font-weight:850;color:#183657}
+.historyOpenBtn span{background:#0b6cff;color:#fff;border-radius:999px;min-width:25px;padding:4px 7px;font-size:9px}
+.historyOverlay{position:fixed;inset:0;background:#071426aa;z-index:80;display:flex;justify-content:flex-end}
+.historyPanel{width:min(520px,100%);height:100%;background:#fff;padding:22px;overflow:auto;box-shadow:-25px 0 70px #0003}
+.historyList{display:grid;gap:9px;margin-top:18px}.historyListItem{border:1px solid var(--line);border-radius:13px;padding:12px}.historyListItem>div{display:flex;justify-content:space-between;gap:12px}.historyListItem b{font-size:11px}.historyListItem span{font-size:9px;color:var(--muted)}.historyListItem p{font-size:10px;color:#66717d;margin:7px 0 0;line-height:1.45}
+@media(max-width:760px){
+  .weekBoard{display:grid!important;grid-template-columns:1fr!important;overflow:visible!important;gap:10px!important}
+  .weekColumn{min-width:0!important;width:100%!important}
+  .weekHead{padding:13px 15px!important}
+  .weekEvents{padding:10px!important}
+  .weekEvent{display:grid!important;grid-template-columns:58px 1fr!important;gap:3px 8px!important;padding:12px!important}
+  .weekEvent b{grid-row:1/3;font-size:13px!important}
+  .weekEvent span{font-size:12px!important;margin:0!important}.weekEvent small{font-size:10px!important;margin:0!important}
+}
