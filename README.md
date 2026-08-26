@@ -1,12 +1,9 @@
-# AVA 1.3.6 — Urgent Voice Confirmation Fix
+# AVA 1.3.7 — iPhone Voice Apply Fix
 
-Restores a clear action after speech recognition.
-
-Voice flow:
-1. Speak command.
-2. AVA shows “Erkannt” with the recognized sentence.
-3. User chooses “✓ In AVA übernehmen” or “Verwerfen”.
-4. Nothing is saved automatically before confirmation.
-
-The confirmation bar is sticky on mobile so it remains visible on iPhone even with longer voice content.
-All existing voice commands continue to use the existing `runVoiceCommand` logic.
+- The mobile confirmation button now has a real async execution wrapper.
+- Shows “AVA übernimmt den Befehl…” and “Wird übernommen…” while saving.
+- Catches and displays execution errors instead of appearing to do nothing.
+- Normalizes iPhone dictation punctuation/quotes.
+- More tolerant intent detection for “Interessent/Kunde anlegen”.
+- Clears the recognized command after a successful prospect creation while retaining the success message.
+- Keeps all 1.3.6 voice confirmation UI and 1.3.5 VAPID changes.

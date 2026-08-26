@@ -61,7 +61,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.3.6.5.4.3.2</div>
+      <div className="versionPill">Alpha 1.3.7.5.4.3.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -121,6 +121,7 @@ function Dashboard({session}){
   const [voiceText,setVoiceText]=useState('');
   const [voiceResult,setVoiceResult]=useState('');
   const [voiceListening,setVoiceListening]=useState(false);
+  const [voiceRunning,setVoiceRunning]=useState(false);
   const recognitionRef=useRef(null);
   const emptyForm={name:'',customer_number:'',phone:'',email:'',vehicle_interest:'',purchased_vehicle:'',stage:'lead',notes:'',contract_end_date:'',ordered_at:'',delivered_at:'',test_drive_at:'',planned_delivery_at:''};
   const [form,setForm]=useState(emptyForm);
@@ -743,8 +744,9 @@ function Dashboard({session}){
   async function runVoiceCommand(){
     const text=voiceText.trim();
     if(!text){setVoiceResult('Bitte sprich oder tippe zuerst einen Befehl ein.');return}
-    const q=text.toLowerCase();
-    const c=findCustomerInSpeech(text);
+    const normalized=text.replace(/[„“”"]/g,'').replace(/[.!?]+$/g,'').replace(/\s+/g,' ').trim();
+    const q=normalized.toLowerCase();
+    const c=findCustomerInSpeech(normalized);
 
     if(q.startsWith('termin ')||q.includes('termin morgen')||q.includes('termin mit ')||q.includes('teammeeting')){
       const when=parseSpeechDate(text);
@@ -777,9 +779,11 @@ function Dashboard({session}){
       q.includes('neue kundin')||
       q.includes('neuen kunden')||
       q.includes('kundin anlegen')||
-      q.includes('kunden anlegen')
+      q.includes('kunden anlegen')||
+      (q.includes('interessent')&&q.includes('anleg'))||
+      (q.includes('kunde')&&q.includes('anleg'))
     ){
-      const parsed=parseNewProspect(text);
+      const parsed=parseNewProspect(normalized);
       if(!parsed.name){setVoiceResult('Den Namen konnte ich nicht eindeutig erkennen. Beispiel: „Neuer Interessent Thomas Berger, möchte einen CX-5 probefahren, Freitag um 14 Uhr.“');return}
       const duplicate=customers.find(x=>(parsed.phone&&x.phone===parsed.phone)||(parsed.email&&x.email?.toLowerCase()===parsed.email.toLowerCase())||(x.name||'').toLowerCase()===parsed.name.toLowerCase());
       if(duplicate){setVoiceResult(`Möglicher vorhandener Kunde gefunden: ${duplicate.name}. Bitte öffne zuerst die Kundenakte, damit kein doppelter Datensatz entsteht.`);return}
@@ -794,6 +798,7 @@ function Dashboard({session}){
           ?`✓ ${parsed.name} wurde als Interessent angelegt. Probefahrt: ${when.toLocaleString('de-DE')}. Erinnerungen und Nachkontakt sind geplant.`
           :`✓ ${parsed.name} wurde als Interessent angelegt. Eine Kundennummer ist noch nicht nötig.`);
         await load();
+        setVoiceText('');
       }
       return;
     }
@@ -888,7 +893,7 @@ function Dashboard({session}){
     {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
     {notificationOpen&&<NotificationCenter notifications={notifications} prefs={notificationPrefs} onClose={()=>{setNotificationOpen(false);markNotificationsRead()}} onPermission={requestNotificationPermission} onPref={updateNotificationPref}/>} 
     {calendarFormOpen&&<CalendarEventForm customers={customers} event={editingEvent} defaultDate={calendarDate} onClose={()=>{setCalendarFormOpen(false);setEditingEvent(null)}} onSave={createManualEvent}/>}
-    {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} onListen={startVoice} onRun={runVoiceCommand} onClose={()=>{stopVoice();setVoiceOpen(false)}}/>}
+    {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} running={voiceRunning} onListen={startVoice} onRun={async()=>{if(voiceRunning)return;setVoiceRunning(true);setVoiceResult('AVA übernimmt den Befehl…');try{await runVoiceCommand()}catch(e){setVoiceResult('Fehler beim Übernehmen: '+(e?.message||e))}finally{setVoiceRunning(false)}}} onClose={()=>{stopVoice();setVoiceOpen(false)}}/>}
   </div>;
 }
 
@@ -1259,7 +1264,7 @@ function CustomerForm({selected,form,setForm,onClose,onSubmit}){
   </div>;
 }
 
-function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
+function VoiceAssistant({text,setText,result,listening,running,onListen,onRun,onClose}){
   const hasText=Boolean((text||'').trim());
   return <div className="modalBackdrop voiceBackdrop">
     <div className="voiceModal">
@@ -1284,7 +1289,7 @@ function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
         <span>AVA speichert erst, wenn du bestätigst.</span>
         <div>
           <button className="btn ghost" onClick={()=>{setText('');}}>Verwerfen</button>
-          <button className="btn primary voiceApply" disabled={!hasText||listening} onClick={onRun}>✓ In AVA übernehmen</button>
+          <button className="btn primary voiceApply" disabled={!hasText||listening||running} onClick={onRun}>{running?'Wird übernommen…':'✓ In AVA übernehmen'}</button>
         </div>
       </div>
     </div>
