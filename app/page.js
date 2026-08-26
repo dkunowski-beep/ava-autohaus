@@ -5,7 +5,7 @@ import {createClient} from '@supabase/supabase-js';
 const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const supabase=(url&&key)?createClient(url,key):null;
-const AVA_VAPID_PUBLIC_KEY='BNK7dT54S_FI8AEnrCLDgPf6wRNJsmTThTxl7k155_dqaRz1o7MzEHa8KQXTfJ5PlX1hipsKF92WBRp23T3aizo';
+const AVA_VAPID_PUBLIC_KEY='BIfwoU-xUJEHmtic5g9W8y55V8AdUCWwV6kgJcGnt11i9AEmtC_eOArt_XGZM3_2dv8prgw1NeMnTwQuLmQkD0w';
 
 const STAGES={
   lead:{label:'Lead',tone:'neutral'},
@@ -61,7 +61,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.3.3.3.2</div>
+      <div className="versionPill">Alpha 1.3.4.4.3.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
