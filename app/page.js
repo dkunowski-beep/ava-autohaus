@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.2</div>
+      <div className="versionPill">Alpha 1.3</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -98,6 +98,12 @@ function Dashboard({session}){
   const [notifications,setNotifications]=useState([]);
   const [notificationPrefs,setNotificationPrefs]=useState(null);
   const [notificationOpen,setNotificationOpen]=useState(false);
+  const [teamMembers,setTeamMembers]=useState([]);
+  const [teamMessages,setTeamMessages]=useState([]);
+  const [teamOpen,setTeamOpen]=useState(false);
+  const [teamRecipient,setTeamRecipient]=useState('');
+  const [teamText,setTeamText]=useState('');
+  const [teamAsTask,setTeamAsTask]=useState(false);
   const [showForm,setShowForm]=useState(false);
   const [selected,setSelected]=useState(null);
   const [detail,setDetail]=useState(null);
@@ -113,7 +119,7 @@ function Dashboard({session}){
 
   async function load(){
     setBusy(true);
-    const [c,t,e,h,d,td,n,np]=await Promise.all([
+    const [c,t,e,h,d,td,n,np,tm,msg]=await Promise.all([
       supabase.from('ava_customers').select('*').eq('owner_id',uid).order('created_at',{ascending:false}),
       supabase.from('ava_tasks').select('*').eq('assigned_to',uid).order('due_at'),
       supabase.from('ava_events').select('*').eq('owner_id',uid).order('starts_at'),
@@ -121,9 +127,11 @@ function Dashboard({session}){
       supabase.from('ava_documents').select('*').eq('owner_id',uid).order('created_at',{ascending:false}),
       supabase.from('ava_todos').select('*').eq('user_id',uid).order('created_at',{ascending:false}),
       supabase.from('ava_notifications').select('*').eq('user_id',uid).order('created_at',{ascending:false}).limit(40),
-      supabase.from('ava_notification_preferences').select('*').eq('user_id',uid).maybeSingle()
+      supabase.from('ava_notification_preferences').select('*').eq('user_id',uid).maybeSingle(),
+      supabase.from('ava_team_members').select('*').eq('active',true).order('display_name'),
+      supabase.from('ava_team_messages').select('*').or(`sender_id.eq.${uid},recipient_id.eq.${uid}`).order('created_at',{ascending:false}).limit(100)
     ]);
-    setCustomers(c.data||[]); setTasks(t.data||[]); setEvents(e.data||[]); setHistory(h.data||[]); setDocuments(d.data||[]); setTodos(td.data||[]); setNotifications(n.data||[]);
+    setCustomers(c.data||[]); setTasks(t.data||[]); setEvents(e.data||[]); setHistory(h.data||[]); setDocuments(d.data||[]); setTodos(td.data||[]); setNotifications(n.data||[]); setTeamMembers(tm.data||[]); setTeamMessages(msg.data||[]);
     if(np.data)setNotificationPrefs(np.data);
     else{
       const defaults={user_id:uid,enabled:true,morning_brief:true,due_followups:true,test_drive_reminders:true,delivery_reminders:true,todo_reminders:true,opportunity_alerts:true,day_close:true};
@@ -510,6 +518,42 @@ function Dashboard({session}){
     }
   }
 
+  async function sendTeamMessage(){
+    const recipient=teamMembers.find(m=>m.user_id===teamRecipient);
+    const text=teamText.trim();
+    if(!recipient||!text){alert('Bitte Empfänger und Nachricht auswählen.');return}
+    const due=teamAsTask?window.prompt('Wann ist die Aufgabe fällig? Leer = heute, oder YYYY-MM-DD HH:MM'):'';
+    let dueAt=null;
+    if(teamAsTask){
+      if(due&&due.trim()){
+        const normalized=due.trim().replace(' ','T');
+        const parsed=new Date(normalized);
+        if(Number.isNaN(parsed.getTime())){alert('Fälligkeit konnte nicht erkannt werden.');return}
+        dueAt=parsed.toISOString();
+      }else{
+        const d=new Date();d.setHours(17,0,0,0);dueAt=d.toISOString();
+      }
+    }
+    const {data,error}=await supabase.rpc('ava_send_team_message',{
+      p_recipient_id:recipient.user_id,p_body:text,p_as_task:teamAsTask,p_due_at:dueAt
+    });
+    if(error){alert(error.message);return}
+    setTeamText('');setTeamAsTask(false);
+    await load();
+  }
+
+  async function completeAssignedTodo(todo){
+    const {error}=await supabase.rpc('ava_complete_assigned_todo',{p_todo_id:todo.id});
+    if(error){alert(error.message);return}
+    await load();
+  }
+
+  async function markTeamMessageRead(message){
+    if(message.recipient_id!==uid||message.read_at)return;
+    await supabase.from('ava_team_messages').update({read_at:new Date().toISOString()}).eq('id',message.id);
+    setTeamMessages(prev=>prev.map(m=>m.id===message.id?{...m,read_at:new Date().toISOString()}:m));
+  }
+
   function taskCustomer(t){return customerMap[t.customer_id]||null}
   async function uploadOffer(customer,file){
     if(!file)return;
@@ -833,7 +877,7 @@ function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,t
 
     <section className="todoSection">
       <div className="sectionTitle"><h2>Meine To-dos</h2><button className="btn soft smallBtn" onClick={onAddTodo}>+ Hinzufügen</button></div>
-      <TodoList todos={todos} onToggle={onToggleTodo} onDelete={onDeleteTodo}/>
+      <TodoList todos={todos} members={teamMembers} uid={uid} onToggle={onToggleTodo} onDelete={onDeleteTodo} onCompleteAssigned={completeAssignedTodo}/>
     </section>
     <div className="twoCol">
       <section>
@@ -860,7 +904,7 @@ function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,t
   </div>;
 }
 
-function TodoList({todos,onToggle,onDelete}){
+function TodoList({todos,members=[],uid,onToggle,onDelete,onCompleteAssigned}){
   const today=new Date();today.setHours(0,0,0,0);
   const visible=todos.filter(t=>{
     if(t.status==='done') return false;
@@ -870,8 +914,8 @@ function TodoList({todos,onToggle,onDelete}){
   });
   return <div className="todoList">
     {visible.length?visible.map(t=><div className="todoItem" key={t.id}>
-      <button className="todoCheck" onClick={()=>onToggle(t)}>○</button>
-      <div className="todoMain"><b>{t.title}</b><span>{t.due_date?fmtDate(t.due_date):'Heute'}</span></div>
+      <button className="todoCheck" onClick={()=>t.assigned_by&&t.user_id===uid?onCompleteAssigned(t):onToggle(t)}>○</button>
+      <div className="todoMain"><b>{t.title}</b><span>{t.assigned_by?`Von ${members.find(m=>m.user_id===t.assigned_by)?.display_name||'Kollege'} · `:''}{t.due_date?fmtDate(t.due_date):'Heute'}</span></div>
       <button className="todoDelete" onClick={()=>onDelete(t)}>×</button>
     </div>):<div className="todoEmpty">Keine persönlichen To-dos für heute.</div>}
   </div>;
@@ -1190,6 +1234,41 @@ function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
       {result&&<div className="voiceResult">{result}</div>}
       <div className="modalFoot voiceFoot"><span>AVA 0.8 verarbeitet ausgewählte Verkaufskommandos – keine Nachricht wird automatisch versendet.</span><div><button className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary" onClick={onRun}>Befehl ausführen</button></div></div>
     </div>
+  </div>;
+}
+
+function TeamView({uid,members,messages,todos,recipient,setRecipient,text,setText,asTask,setAsTask,onSend,onRead,onCompleteTodo}){
+  const me=members.find(m=>m.user_id===uid);
+  const others=members.filter(m=>m.user_id!==uid);
+  const member=id=>members.find(m=>m.user_id===id);
+  const assigned=todos.filter(t=>t.user_id===uid&&t.assigned_by&&t.status!=='done');
+  return <div className="page teamPage">
+    <div className="pageTitleRow"><div><span className="eyebrow">AVA Team Assistant</span><h1>Team</h1><p>Kurze Nachrichten, Aufgaben und Übergaben ohne WhatsApp-Chaos.</p></div></div>
+    <div className="teamLayout">
+      <section className="teamComposer">
+        <div className="sectionTitle"><h2>Nachricht senden</h2><span>{me?.display_name||'Mein Team'}</span></div>
+        <label className="teamLabel">An</label>
+        <select value={recipient} onChange={e=>setRecipient(e.target.value)}><option value="">Kollegen auswählen…</option>{others.map(m=><option value={m.user_id} key={m.user_id}>{m.display_name}{m.role?` · ${m.role}`:''}</option>)}</select>
+        <label className="teamLabel">Nachricht</label>
+        <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="z. B. Bitte stell den CX-5 für 14 Uhr bereit."/>
+        <label className="teamTaskSwitch"><input type="checkbox" checked={asTask} onChange={e=>setAsTask(e.target.checked)}/><span><b>Als Aufgabe senden</b><small>Der Empfänger bekommt sie zusätzlich unter „Meine To-dos“.</small></span></label>
+        <button className="btn primary wide" onClick={onSend}>{asTask?'Aufgabe senden':'Nachricht senden'}</button>
+      </section>
+      <section className="teamInbox">
+        <div className="sectionTitle"><h2>Nachrichten</h2><span>{messages.filter(m=>m.recipient_id===uid&&!m.read_at).length} neu</span></div>
+        <div className="chatList">{messages.length?messages.map(m=>{
+          const incoming=m.recipient_id===uid, other=member(incoming?m.sender_id:m.recipient_id);
+          return <button key={m.id} className={`chatBubble ${incoming?'incoming':'outgoing'} ${incoming&&!m.read_at?'unread':''}`} onClick={()=>onRead(m)}>
+            <div className="chatAvatar">{(other?.display_name||'?').slice(0,1).toUpperCase()}</div>
+            <div><span>{incoming?'Von':'An'} {other?.display_name||'Kollege'} · {fmtDateTime(m.created_at)}</span><b>{m.body}</b>{m.message_type==='task'&&<small>Aufgabe{m.due_at?` · fällig ${fmtDateTime(m.due_at)}`:''}</small>}</div>
+          </button>
+        }):<EmptyState title="Noch keine Nachrichten" text="Schreib einem Kollegen die erste AVA-Team-Nachricht."/>}</div>
+      </section>
+    </div>
+    <section className="assignedTasks">
+      <div className="sectionTitle"><h2>Mir zugewiesen</h2><span>{assigned.length} offen</span></div>
+      <div className="assignedGrid">{assigned.length?assigned.map(t=><div className="assignedCard" key={t.id}><span>Von {member(t.assigned_by)?.display_name||'Kollege'}</span><b>{t.title}</b><small>{t.due_date?`Fällig ${fmtDate(t.due_date)}`:'Ohne Fälligkeit'}</small><button className="btn soft" onClick={()=>onCompleteTodo(t)}>✓ Erledigt</button></div>):<EmptyState title="Alles erledigt" text="Dir ist aktuell keine Team-Aufgabe zugewiesen." compact/>}</div>
+    </section>
   </div>;
 }
 
