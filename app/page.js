@@ -35,7 +35,7 @@ export default function App(){
 }
 
 function Splash({text,sub}){
-  return <div className="splash"><div className="brandMark">A</div><div className="brandName">AVA</div><h2>{text}</h2>{sub&&<p>{sub}</p>}</div>;
+  return <div className="splash"><div className="avaLogoMark splashLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div className="brandName">AVA</div><h2>{text}</h2>{sub&&<p>{sub}</p>}</div>;
 }
 
 function Login(){
@@ -58,9 +58,9 @@ function Login(){
 
   return <div className="authPage">
     <div className="authVisual">
-      <div className="authBrand"><div className="brandMark">A</div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
+      <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 0.7</div>
+      <div className="versionPill">Alpha 0.7.1</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -345,7 +345,7 @@ function Dashboard({session}){
 function Sidebar({tab,setTab,email}){
   const items=[['Heute','⌂'],['Kalender','▦'],['Kunden','◉'],['Team','◇']];
   return <aside className="sidebar">
-    <div className="sideBrand"><div className="brandMark small">A</div><div><b>AVA</b><span>Alpha 0.7</span></div></div>
+    <div className="sideBrand"><div className="avaLogoMark"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
     <nav className="sideNav">{items.map(([label,icon])=><button key={label} className={tab===label?'active':''} onClick={()=>setTab(label)}><span>{icon}</span>{label}</button>)}</nav>
     <div className="sideFoot"><div className="userDot">V</div><div className="userMeta"><b>Verkäufer</b><span>{email}</span></div><button className="iconButton" title="Abmelden" onClick={()=>supabase.auth.signOut()}>↗</button></div>
   </aside>;
@@ -353,7 +353,7 @@ function Sidebar({tab,setTab,email}){
 
 function Topbar({tab,onNew,onVoice}){
   return <header className="topbar">
-    <div><span className="eyebrow">AVA Workspace</span><h2>{tab}</h2></div>
+    <div><span className="eyebrow">AVA · Markenautohaus</span><h2>{tab}</h2></div>
     <div className="topActions"><button className="btn soft voiceBtn" onClick={onVoice}>🎙 AVA</button><button className="btn primary" onClick={onNew}>+ Kunde</button></div>
   </header>;
 }
@@ -361,7 +361,7 @@ function Topbar({tab,onNew,onVoice}){
 function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
   return <div className="page">
     <div className="heroRow">
-      <div><span className="eyebrow">Heute im Verkauf</span><h1>Guten Überblick behalten.</h1><p>AVA bündelt Kontakte, Probefahrten, Auslieferungen und Chancen an einem Ort.</p></div>
+      <div><span className="eyebrow">Heute im Verkauf</span><h1>Mehr Zeit für den Verkauf.</h1><p>AVA erinnert, organisiert und hält dir den Rücken frei – damit du dich auf deine Kunden konzentrieren kannst.</p></div>
       <div className="dateCard"><span>{new Date().toLocaleDateString('de-DE',{weekday:'long'})}</span><b>{new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'long'})}</b></div>
     </div>
     <div className="metricGrid">

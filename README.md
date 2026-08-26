@@ -1,17 +1,14 @@
-# AVA Alpha 0.6
+# AVA Alpha 0.7.1
 
-Voice Assistant milestone.
+Branding & design update based on the approved AVA visual concept.
 
-New:
-- functional AVA voice modal on desktop and mobile
-- browser microphone recognition in German where supported
-- typed fallback for browsers without speech recognition
-- voice command: schedule a test drive for an existing customer
-- calendar conflict detection remains active
-- automatic test-drive reminders remain active
-- voice command: customer not reached -> new contact attempt after two hours / next useful business time
-- voice command: save a customer note to history
-- voice command: open a customer record
-- commands can identify a customer by name or customer number
+- New AVA logo mark integrated
+- Dark navy / electric blue automotive SaaS visual language
+- Branded desktop sidebar and sticky topbar
+- Premium cards, buttons and calendar styling
+- Redesigned AVA voice assistant visual
+- Stronger mobile AVA voice button
+- Login and splash branding updated
+- Existing 0.7 workflow logic retained
 
-No messages are sent automatically. Use fictional test data only during alpha.
+Use fictional test data only during alpha.

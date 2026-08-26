@@ -62,3 +62,32 @@
   .mobileVoice{position:relative!important;background:#111418!important;color:#fff!important;width:58px!important;height:58px!important;border-radius:50%!important;align-self:center;justify-self:center;margin-top:-22px;box-shadow:0 10px 28px #0003}
   .mobileVoice span{font-size:22px!important}.mobileVoice{font-size:9px!important;font-weight:900!important}
 }
+
+/* AVA 0.7.1 branding redesign */
+:root{--ava-navy:#08182f;--ava-blue:#0b6cff;--ava-blue-2:#2e8cff;--ava-bg:#f6f8fb;--ava-line:#e3e9f0;--ava-shadow:0 16px 42px rgba(12,32,62,.08)}
+body{background:var(--ava-bg)}
+.sidebar{background:radial-gradient(circle at 25% 92%,rgba(15,108,255,.22),transparent 28%),linear-gradient(180deg,#08182f 0%,#07111f 100%)}
+.sideNav button.active{background:linear-gradient(135deg,#0d66d8,#1455ad);box-shadow:0 8px 20px rgba(11,108,255,.2)}
+.sideNav button:hover{background:#12325d;color:#fff}.sideBrand b{font-size:24px;letter-spacing:-.03em}.sideBrand span{font-size:9px;color:#8ca3c2;margin-top:2px}
+.workspace{background:var(--ava-bg)}
+.topbar{background:rgba(255,255,255,.88);backdrop-filter:blur(16px);margin:0 -34px;padding:0 34px;border-bottom:1px solid var(--ava-line);position:sticky;top:0;z-index:20}
+.btn.primary{background:linear-gradient(135deg,var(--ava-blue),var(--ava-blue-2));color:#fff;box-shadow:0 8px 18px rgba(11,108,255,.18)}
+.btn.soft{background:#eef4fb;color:#183657}.voiceBtn{background:#0b1d35!important;color:#fff!important;border:1px solid #17365d!important}
+.metric,.taskCard,.agenda,.customerCard,.calendarSurface,.historyCard,.teamCard,.opportunity{border-color:var(--ava-line);box-shadow:var(--ava-shadow)}
+.metricNumber{color:#0c2b53}.customerCard:hover,.taskCard:hover{transform:translateY(-2px);transition:.18s ease;box-shadow:0 18px 46px rgba(11,32,66,.11)}
+.searchBox:focus-within{border-color:#7fb2ff;box-shadow:0 0 0 3px #e7f1ff}.calendarEvent .eventAccent{background:linear-gradient(180deg,var(--ava-blue),#4aa3ff)}
+.weekEvent{background:#eef5ff}.weekEvent b{color:#0b67dd}.drawer{box-shadow:-30px 0 90px rgba(3,19,42,.22)}
+.voiceBackdrop{background:linear-gradient(180deg,rgba(3,16,34,.72),rgba(4,20,43,.82))}.voiceModal{background:linear-gradient(180deg,#fff 0%,#f8fbff 100%)}
+.voiceOrb{background:radial-gradient(circle at 35% 30%,#35a1ff 0%,#0b6cff 38%,#082850 75%,#05162b 100%);box-shadow:0 16px 45px rgba(11,108,255,.35),0 0 0 8px rgba(11,108,255,.07)}
+.authVisual{background:radial-gradient(circle at 22% 82%,rgba(19,103,255,.33),transparent 28%),radial-gradient(circle at 80% 18%,rgba(45,139,255,.15),transparent 24%),linear-gradient(160deg,#06162d,#0a2243 55%,#071426)}
+.authClaim{background:linear-gradient(180deg,#fff,#a9cfff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.versionPill{background:#0f376b;border:1px solid #24588d}
+.avaLogoMark{width:40px;height:40px;position:relative;display:inline-block;filter:drop-shadow(0 7px 14px rgba(0,104,255,.25))}
+.avaLogoMark .logoSlash{position:absolute;display:block;background:linear-gradient(180deg,#55b6ff,#0b6cff 55%,#0a397b);border-radius:12px}
+.avaLogoMark .one{width:12px;height:38px;left:9px;top:1px;transform:rotate(34deg)}.avaLogoMark .two{width:12px;height:38px;right:9px;top:1px;transform:rotate(-34deg)}
+.avaLogoMark .logoCut{position:absolute;width:19px;height:6px;background:#fff;left:10px;top:22px;transform:rotate(-13deg);border-radius:6px}
+.authLogo{width:48px;height:48px}.authLogo .one,.authLogo .two{height:46px}.authLogo .logoCut{top:27px;left:13px;width:22px}
+.splashLogo{width:60px;height:60px}.splashLogo .one,.splashLogo .two{height:56px;width:15px}.splashLogo .one{left:14px}.splashLogo .two{right:14px}.splashLogo .logoCut{top:34px;left:16px;width:28px}
+.mobileNav{background:rgba(255,255,255,.95);box-shadow:0 -8px 30px rgba(18,34,52,.08)}
+.mobileVoice{background:radial-gradient(circle at 35% 30%,#34a3ff,#0b6cff 45%,#08254b 78%,#041326)!important;box-shadow:0 12px 30px rgba(11,108,255,.35)!important}
+@media(max-width:760px){.topbar{margin:0 -14px;padding:0 14px}}
