@@ -1086,30 +1086,44 @@ function TodayView({avaFocus,salesRadar,onCoach,openTasks,todayEvents,customers,
       <Metric n={contractAlerts.length} label="Vertragschancen" sub="ca. 6 Monate vorher"/>
     </div>
 
-    <section className="avaFocusSection">
-      <div className="sectionTitle"><div><span className="eyebrow">AVA Fokus · Pareto + Eisenhower</span><h2>⚡ Was bringt dich heute wirklich weiter?</h2></div><span>{avaFocus?.total||0} offene Punkte bewertet</span></div>
-
-      <div className="paretoFocus">
-        <div className="paretoLead"><span>80/20 Fokus</span><b>Konzentriere dich zuerst auf die wenigen Vorgänge mit dem größten Abschlusshebel.</b></div>
-        <div className="paretoCards">
-          {(avaFocus?.pareto||[]).length?(avaFocus.pareto.map((r,i)=><button key={r.customer.id} className="paretoCard" onClick={()=>onOpenCustomer(r.customer)}>
-            <span>#{i+1} · {r.score}%</span>
-            <b>{r.customer.name}</b>
-            <small>{r.action}</small>
-          </button>)):<span className="muted">Noch nicht genug offene Verkaufschancen für eine 80/20-Auswertung.</span>}
-        </div>
+    <section className="salesFocusSection">
+      <div className="salesFocusHero">
+        <div><span className="eyebrow">AVA Sales Focus</span><h2>⚡ Das solltest du jetzt tun, um mehr zu verkaufen</h2><p>AVA kombiniert Abschlusschance, Dringlichkeit und 80/20-Potenzial. Pareto und Eisenhower arbeiten dabei im Hintergrund.</p></div>
+        <div className="focusScoreBadge"><small>OFFENE PUNKTE</small><b>{avaFocus?.total||0}</b></div>
       </div>
 
-      <div className="eisenhowerGrid">
-        <FocusQuadrant tone="red" icon="🔴" title="JETZT" subtitle="wichtig + dringend" items={avaFocus?.now||[]} onOpenCustomer={onOpenCustomer}/>
-        <FocusQuadrant tone="blue" icon="🔵" title="PLANEN" subtitle="wichtig + nicht dringend" items={avaFocus?.plan||[]} onOpenCustomer={onOpenCustomer}/>
-        <FocusQuadrant tone="amber" icon="🟠" title="DELEGIEREN" subtitle="dringend + weniger wichtig" items={avaFocus?.delegate||[]} onOpenCustomer={onOpenCustomer}/>
-        <FocusQuadrant tone="gray" icon="⚪" title="SPÄTER" subtitle="nicht dringend + weniger wichtig" items={avaFocus?.later||[]} onOpenCustomer={onOpenCustomer}/>
+      <div className="nextBestActions">
+        {(salesRadar||[]).slice(0,4).map((r,i)=>{
+          const label=i===0?'JETZT':i===1?'DANACH':'HEUTE';
+          const urgency=i===0?'hot':i===1?'warm':'normal';
+          return <div className={`nextActionCard ${urgency}`} key={r.customer.id}>
+            <div className="nextActionRank"><span>{label}</span><b>#{i+1}</b></div>
+            <div className="nextActionMain"><div className="nextActionTitle"><h3>{r.customer.name}</h3><strong>{r.score}% {r.score>=75?'🔥':r.score>=55?'🟠':'🟡'}</strong></div>
+              <p>{r.customer.vehicle_interest||'Fahrzeuginteresse offen'}</p>
+              <div className="nextActionReason">{r.reasons?.length?r.reasons.join(' · '):'Offener Verkaufsvorgang'}</div>
+              <div className="nextActionAdvice"><small>AVA empfiehlt</small><b>{r.action}</b></div>
+            </div>
+            <div className="nextActionButtons"><button className="btn soft" onClick={()=>onOpenCustomer(r.customer)}>Kundenakte</button><button className="btn coachBtn" onClick={()=>onCoach(r.customer)}>✨ Sales Coach</button></div>
+          </div>
+        })}
+        {!(salesRadar||[]).length&&<EmptyState title="Keine priorisierten Verkaufschancen" text="Sobald offene Interessenten vorhanden sind, priorisiert AVA hier deinen Verkaufstag." compact/>}
+      </div>
+
+      <div className="focusSupportGrid">
+        <div className="focusSupportCard danger"><div className="focusSupportHead"><span>🔴</span><div><b>Muss heute passieren</b><small>dringend + wichtig</small></div><strong>{avaFocus?.now?.length||0}</strong></div>
+          <div className="focusMiniList">{(avaFocus?.now||[]).slice(0,4).map(i=><button key={i.key} onClick={()=>i.customer&&onOpenCustomer(i.customer)}><b>{i.title}</b><span>{i.subtitle}</span></button>)}{!(avaFocus?.now||[]).length&&<span className="muted">Alles im grünen Bereich.</span>}</div>
+        </div>
+        <div className="focusSupportCard delegate"><div className="focusSupportHead"><span>👥</span><div><b>Kannst du abgeben</b><small>deine Zeit lieber in Verkauf investieren</small></div><strong>{avaFocus?.delegate?.length||0}</strong></div>
+          <div className="focusMiniList">{(avaFocus?.delegate||[]).slice(0,4).map(i=><div key={i.key}><b>{i.title}</b><span>{i.subtitle}</span></div>)}{!(avaFocus?.delegate||[]).length&&<span className="muted">Aktuell nichts zu delegieren.</span>}</div>
+        </div>
+        <div className="focusSupportCard later"><div className="focusSupportHead"><span>🕒</span><div><b>Nicht jetzt</b><small>bewusst aus deinem Fokus halten</small></div><strong>{(avaFocus?.plan?.length||0)+(avaFocus?.later?.length||0)}</strong></div>
+          <div className="focusMiniList">{[...(avaFocus?.plan||[]),...(avaFocus?.later||[])].slice(0,4).map(i=><button key={i.key} onClick={()=>i.customer&&onOpenCustomer(i.customer)}><b>{i.title}</b><span>{i.subtitle}</span></button>)}{!((avaFocus?.plan?.length||0)+(avaFocus?.later?.length||0))&&<span className="muted">Keine nachrangigen Punkte.</span>}</div>
+        </div>
       </div>
     </section>
 
     <section className="salesRadarSection">
-      <div className="sectionTitle"><div><span className="eyebrow">AVA Sales Radar</span><h2>🔥 Deine besten Verkaufschancen</h2></div><span>automatisch priorisiert</span></div>
+      <div className="sectionTitle"><div><span className="eyebrow">Sales Radar · Details</span><h2>🔥 Weitere Verkaufschancen im Blick</h2></div><span>automatisch priorisiert</span></div>
       <div className="salesRadarGrid">
         {salesRadar?.length?salesRadar.map((r,i)=><div className="salesRadarCard" key={r.customer.id}>
           <div className="radarTop"><span>#{i+1}</span><b>{r.score}% <em>{r.score>=75?'🔥':r.score>=55?'🟠':'🟡'}</em></b></div>
