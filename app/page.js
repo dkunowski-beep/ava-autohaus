@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 0.8.1</div>
+      <div className="versionPill">Alpha 1.0</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -88,6 +88,7 @@ function Dashboard({session}){
   const [tasks,setTasks]=useState([]);
   const [events,setEvents]=useState([]);
   const [history,setHistory]=useState([]);
+  const [documents,setDocuments]=useState([]);
   const [busy,setBusy]=useState(true);
   const [week,setWeek]=useState(false);
   const [showForm,setShowForm]=useState(false);
@@ -104,13 +105,14 @@ function Dashboard({session}){
 
   async function load(){
     setBusy(true);
-    const [c,t,e,h]=await Promise.all([
+    const [c,t,e,h,d]=await Promise.all([
       supabase.from('ava_customers').select('*').eq('owner_id',uid).order('created_at',{ascending:false}),
       supabase.from('ava_tasks').select('*').eq('assigned_to',uid).order('due_at'),
       supabase.from('ava_events').select('*').eq('owner_id',uid).order('starts_at'),
-      supabase.from('ava_history').select('*').eq('actor_id',uid).order('created_at',{ascending:false})
+      supabase.from('ava_history').select('*').eq('actor_id',uid).order('created_at',{ascending:false}),
+      supabase.from('ava_documents').select('*').eq('owner_id',uid).order('created_at',{ascending:false})
     ]);
-    setCustomers(c.data||[]); setTasks(t.data||[]); setEvents(e.data||[]); setHistory(h.data||[]);
+    setCustomers(c.data||[]); setTasks(t.data||[]); setEvents(e.data||[]); setHistory(h.data||[]); setDocuments(d.data||[]);
     setBusy(false);
   }
 
@@ -123,6 +125,10 @@ function Dashboard({session}){
 
   const customerMap=useMemo(()=>Object.fromEntries(customers.map(c=>[c.id,c])),[customers]);
   const openTasks=useMemo(()=>tasks.filter(t=>t.status==='open'),[tasks]);
+  const importantTasks=useMemo(()=>{
+    const end=new Date();end.setHours(23,59,59,999);
+    return tasks.filter(t=>t.status==='open'&&new Date(t.due_at)<=end);
+  },[tasks]);
   const todayEvents=useMemo(()=>{
     const now=new Date();
     return events.filter(e=>{const d=new Date(e.starts_at);return d.toDateString()===now.toDateString()});
@@ -221,7 +227,79 @@ function Dashboard({session}){
     window.location.href=`mailto:${c.email||''}?subject=${subject}&body=${body}`;
   }
 
+  async function markPurchase(customer){
+    const number=window.prompt('Bitte Kundennummer eintragen:');
+    if(!number)return;
+    const vehicle=window.prompt('Gekauftes Fahrzeug:',customer.purchased_vehicle||customer.vehicle_interest||'');
+    if(!vehicle)return;
+    const {error}=await supabase.rpc('ava_mark_purchase',{p_customer_id:customer.id,p_customer_number:number,p_vehicle:vehicle,p_ordered_at:new Date().toISOString().slice(0,10)});
+    if(error){alert(error.message.includes('KUNDENNUMMER_REQUIRED')?'Bitte Kundennummer eintragen.':error.message);return}
+    await load();setDetail(null);
+  }
+
+  async function startDeliveryAssistant(customer){
+    const dt=window.prompt('Geplante Auslieferung (YYYY-MM-DD HH:MM):');
+    if(!dt)return;
+    const parsed=new Date(dt.replace(' ','T'));
+    if(Number.isNaN(parsed.getTime())){alert('Datum konnte nicht erkannt werden.');return}
+    const {error}=await supabase.rpc('ava_start_delivery_assistant',{p_customer_id:customer.id,p_delivery_at:parsed.toISOString()});
+    if(error)alert(error.message);else await load();
+  }
+
+  async function completeDelivery(customer){
+    if(!window.confirm('Auslieferung als erfolgt markieren? AVA beendet Lieferaufgaben und plant den Nachkontakt für morgen.'))return;
+    const {error}=await supabase.rpc('ava_complete_delivery',{p_customer_id:customer.id});
+    if(error)alert(error.message);else await load();
+  }
+
+  async function toggleWaiting(customer){
+    const next=!customer.waiting_on_customer;
+    const {error}=await supabase.from('ava_customers').update({waiting_on_customer:next}).eq('id',customer.id);
+    if(error)alert(error.message);else{
+      await supabase.from('ava_history').insert({customer_id:customer.id,actor_id:uid,action:next?'Wartet auf Kunde':'Warten beendet',details:''});
+      await load();
+    }
+  }
+
+  async function rescheduleTestDrive(event){
+    const dt=window.prompt('Neuer Probefahrt-Termin (YYYY-MM-DD HH:MM):');
+    if(!dt)return;
+    const parsed=new Date(dt.replace(' ','T'));
+    if(Number.isNaN(parsed.getTime())){alert('Datum konnte nicht erkannt werden.');return}
+    const {error}=await supabase.rpc('ava_reschedule_test_drive',{p_event_id:event.id,p_new_start:parsed.toISOString(),p_minutes:60});
+    if(error)alert(error.message.includes('TERMIN_CONFLICT')?'Terminüberschneidung erkannt.':error.message);else await load();
+  }
+
+  async function completeTestDrive(event){
+    const choice=window.prompt('Probefahrt durchgeführt. Interesse? Bitte eingeben: heiß / unentschlossen / kein interesse');
+    if(!choice)return;
+    const q=choice.toLowerCase();
+    const interest=q.includes('heiß')||q.includes('heiss')?'hot':q.includes('unentsch')?'undecided':'cold';
+    const {error}=await supabase.rpc('ava_complete_test_drive',{p_event_id:event.id,p_interest:interest});
+    if(error)alert(error.message);else await load();
+  }
+
   function taskCustomer(t){return customerMap[t.customer_id]||null}
+  async function uploadOffer(customer,file){
+    if(!file)return;
+    if(file.size>10*1024*1024){alert('Die Datei ist größer als 10 MB.');return}
+    const safe=file.name.replace(/[^\w.\-]+/g,'_');
+    const path=`${uid}/${customer.id}/${Date.now()}-${safe}`;
+    const {error:uploadError}=await supabase.storage.from('ava-documents').upload(path,file,{contentType:file.type||undefined,upsert:false});
+    if(uploadError){alert(uploadError.message);return}
+    const {error:dbError}=await supabase.from('ava_documents').insert({customer_id:customer.id,owner_id:uid,document_type:'offer',file_name:file.name,storage_path:path,mime_type:file.type||null,file_size:file.size});
+    if(dbError){await supabase.storage.from('ava-documents').remove([path]);alert(dbError.message);return}
+    await supabase.from('ava_history').insert({customer_id:customer.id,actor_id:uid,action:'Angebot hinzugefügt',details:file.name});
+    await quickWorkflow(customer,'offer');
+    await load();
+  }
+
+  async function openDocument(doc){
+    const {data,error}=await supabase.storage.from('ava-documents').createSignedUrl(doc.storage_path,60);
+    if(error){alert(error.message);return}
+    window.open(data.signedUrl,'_blank','noopener,noreferrer');
+  }
+
   async function setEventStatus(event,status){
     let reason=null;
     if(status==='cancelled'){
@@ -372,6 +450,22 @@ function Dashboard({session}){
       return;
     }
 
+    if(c&&(q.includes('hat gekauft')||q.includes('gekauft'))){
+      const numberMatch=text.match(/kundennummer\s+([A-Za-z0-9\-]+)/i);
+      if(!numberMatch){setVoiceResult(`${c.name} hat gekauft. Bitte nenne noch die Kundennummer, z. B. „${c.name} hat gekauft, Kundennummer 47182, gekauftes Fahrzeug CX-5.“`);return}
+      const vehicleMatch=text.match(/gekauftes fahrzeug\s+([^,.]+)/i)||text.match(/hat\s+(?:den|die|das|einen|eine)\s+([^,.]+?)\s+gekauft/i);
+      const vehicle=vehicleMatch?.[1]?.trim()||c.vehicle_interest||'';
+      const {error}=await supabase.rpc('ava_mark_purchase',{p_customer_id:c.id,p_customer_number:numberMatch[1],p_vehicle:vehicle,p_ordered_at:new Date().toISOString().slice(0,10)});
+      if(error)setVoiceResult(error.message);else{setVoiceResult(`✓ Kaufabschluss bei ${c.name} gespeichert. Lieferstatus-Workflow wurde gestartet.`);await load()}
+      return;
+    }
+
+    if(c&&q.includes('wartet auf kunde')){
+      await supabase.from('ava_customers').update({waiting_on_customer:true}).eq('id',c.id);
+      await supabase.from('ava_history').insert({customer_id:c.id,actor_id:uid,action:'Wartet auf Kunde',details:'Per AVA Voice'});
+      setVoiceResult(`${c.name} steht jetzt auf „Wartet auf Kunde“.`);await load();return;
+    }
+
     if((q.includes('öffne')||q.includes('oeffne')||q.includes('zeige'))&&c){
       setDetail(c);setVoiceOpen(false);setVoiceResult('');return;
     }
@@ -418,14 +512,14 @@ function Dashboard({session}){
     <main className="workspace">
       <Topbar tab={tab} onNew={fresh} onVoice={()=>{setVoiceOpen(true);setVoiceResult('')}}/>
       {busy?<LoadingState/>:<>
-        {tab==='Heute'&&<TodayView openTasks={openTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
+        {tab==='Heute'&&<TodayView openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
         {tab==='Kunden'&&<CustomersView customers={filteredCustomers} search={search} setSearch={setSearch} onOpen={setDetail} onEdit={edit} onMail={openMail} onNew={fresh}/>}
-        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} week={week} setWeek={setWeek} onOpenCustomer={setDetail} onSetStatus={setEventStatus}/>}        {tab==='Team'&&<TeamView email={session.user.email}/>}
+        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} week={week} setWeek={setWeek} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive}/>}        {tab==='Team'&&<TeamView email={session.user.email}/>}
       </>}
     </main>
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
-    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)}/>}
+    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting}/>}
     {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} onListen={startVoice} onRun={runVoiceCommand} onClose={()=>{stopVoice();setVoiceOpen(false)}}/>}
   </div>;
 }
@@ -482,15 +576,17 @@ function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,o
 
 function TaskCard({task,customer,onReached,onNotReached,onDone,onOpenCustomer}){
   const prep=task.type==='test_drive_prepare';
-  const contact=!prep;
+  const delivery=task.type==='delivery_prepare';
+  const contact=!prep&&!delivery;
+  const waiting=task.workflow_state==='waiting_customer';
   const overdue=new Date(task.due_at)<new Date();
   return <article className={`taskCard ${overdue?'overdue':''}`}>
     <div className="taskIcon">{prep?'🚗':'☎'}</div>
     <div className="taskMain">
-      <div className="taskTop"><div><span className={`statusBadge ${prep?'blue':'neutral'}`}>{prep?'Probefahrt':'Kontakt'}</span><b>{task.title}</b></div><span className="due">{fmtDateTime(task.due_at)}</span></div>
+      <div className="taskTop"><div><span className={`statusBadge ${delivery?'violet':prep?'blue':waiting?'amber':'neutral'}`}>{delivery?'Auslieferung':prep?'Probefahrt':waiting?'Wartet auf Kunde':'Kontakt'}</span><b>{task.title}</b></div><span className="due">{fmtDateTime(task.due_at)}</span></div>
       {customer?<button className="customerLink" onClick={()=>onOpenCustomer(customer)}>{customer.name} · {customer.customer_number?`KD ${customer.customer_number} · `:''}{customer.phone||'keine Tel.'} · {customer.vehicle_interest||'kein Fahrzeug'}</button>:<span className="muted">{task.details||'Kein Kunde zugeordnet'}</span>}
       <div className="taskActions">
-        <button className="btn primary" onClick={onReached}>{prep?'✓ Fahrzeug vorbereitet':'✓ Erreicht'}</button>
+        <button className="btn primary" onClick={onReached}>{delivery?'✓ Erledigt':prep?'✓ Fahrzeug vorbereitet':'✓ Erreicht'}</button>
         {contact&&<button className="btn soft" onClick={onNotReached}>Nicht erreicht</button>}
         <button className="btn ghost" onClick={onDone}>Erledigt</button>
       </div>
@@ -499,10 +595,12 @@ function TaskCard({task,customer,onReached,onNotReached,onDone,onOpenCustomer}){
 }
 
 function AgendaItem({event,customer,onOpenCustomer}){
-  return <div className="agendaItem">
-    <div className="agendaTime">{fmtTime(event.starts_at)}</div>
-    <div className="agendaLine"/>
-    <div className="agendaBody"><b>{event.title}</b>{customer?<button onClick={()=>onOpenCustomer(customer)}>{customer.name}{customer.customer_number?` · KD ${customer.customer_number}`:''}</button>:<span>Kein Kunde</span>}<small>{event.vehicle||customer?.vehicle_interest||''}</small></div>
+  const completed=event.status==='completed',cancelled=event.status==='cancelled';
+  return <div className={`agendaItem ${cancelled?'agendaCancelled':''}`}>
+    <div className="agendaTime">{fmtTime(event.starts_at)}</div><div className="agendaLine"/>
+    <div className="agendaBody"><div className="agendaTitleRow"><b>{event.title}</b><span className={`miniStatus ${completed?'done':cancelled?'cancelled':'planned'}`}>{completed?'✓ Erfolgt':cancelled?'Abgesagt':'Geplant'}</span></div>
+    {customer?<button onClick={()=>onOpenCustomer(customer)}>{customer.name}{customer.customer_number?` · KD ${customer.customer_number}`:''}</button>:<span>Kein Kunde</span>}
+    <small>{event.vehicle||customer?.vehicle_interest||''}</small></div>
   </div>;
 }
 
@@ -519,7 +617,7 @@ function CustomersView({customers,search,setSearch,onOpen,onEdit,onMail,onNew}){
 function CustomerCard({c,onOpen,onEdit,onMail}){
   const stage=STAGES[c.stage]||STAGES.lead;
   return <article className="customerCard">
-    <div className="customerHead"><div className="avatar">{initials(c.name)}</div><div className="customerIdentity"><b>{c.name}</b><span>{c.customer_number?`KD ${c.customer_number}`:'Interessent · noch keine Kundennummer'}</span></div><span className={`statusBadge ${stage.tone}`}>{stage.label}</span></div>
+    <div className="customerHead"><div className="avatar">{initials(c.name)}</div><div className="customerIdentity"><b>{c.name}</b><span>{c.customer_number?`KD ${c.customer_number}`:'Interessent · noch keine Kundennummer'}</span></div><span className={`statusBadge ${c.waiting_on_customer?'amber':stage.tone}`}>{c.waiting_on_customer?'Wartet auf Kunde':stage.label}</span></div>
     <div className="vehicleLine"><span>Fahrzeug</span><b>{c.vehicle_interest||'Noch nicht hinterlegt'}</b></div>
     <div className="customerFacts">
       <div><span>Telefon</span><b>{c.phone||'—'}</b></div>
@@ -531,36 +629,34 @@ function CustomerCard({c,onOpen,onEdit,onMail}){
   </article>;
 }
 
-function CalendarView({events,customerMap,week,setWeek,onOpenCustomer,onSetStatus}){
+function CalendarView({events,customerMap,week,setWeek,onOpenCustomer,onSetStatus,onReschedule,onCompleteTestDrive}){
   const today=new Date();
   const dayEvents=events.filter(e=>new Date(e.starts_at).toDateString()===today.toDateString());
   return <div className="page">
     <div className="pageTitleRow"><div><span className="eyebrow">Terminplanung</span><h1>Kalender</h1><p>Probefahrten, Auslieferungen und Verkaufsaufgaben mit Kundenkontext.</p></div><div className="segmented"><button className={!week?'active':''} onClick={()=>setWeek(false)}>Tag</button><button className={week?'active':''} onClick={()=>setWeek(true)}>Woche</button></div></div>
-    {!week?<DayCalendar events={dayEvents} customerMap={customerMap} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus}/>:<WeekCalendar events={events} customerMap={customerMap} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus}/>}
+    {!week?<DayCalendar events={dayEvents} customerMap={customerMap} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus} onReschedule={onReschedule} onCompleteTestDrive={onCompleteTestDrive}/>:<WeekCalendar events={events} customerMap={customerMap} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus}/>}
   </div>;
 }
 
-function DayCalendar({events,customerMap,onOpenCustomer,onSetStatus}){
+function DayCalendar({events,customerMap,onOpenCustomer,onSetStatus,onReschedule,onCompleteTestDrive}){
   return <div className="calendarSurface">
     <div className="calendarHeader"><div><span>Heute</span><b>{new Date().toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</b></div><span className="countPill">{events.length} Termine</span></div>
-    <div className="dayTimeline">{events.length?events.map(e=><CalendarEvent key={e.id} e={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus}/>):<EmptyState title="Keine Termine heute" text="Für heute ist aktuell nichts im Kalender eingetragen."/>}</div>
+    <div className="dayTimeline">{events.length?events.map(e=><CalendarEvent key={e.id} e={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus} onReschedule={onReschedule} onCompleteTestDrive={onCompleteTestDrive}/>):<EmptyState title="Keine Termine heute" text="Für heute ist aktuell nichts im Kalender eingetragen."/>}</div>
   </div>;
 }
 
-function CalendarEvent({e,customer,onOpenCustomer,onSetStatus}){
+function CalendarEvent({e,customer,onOpenCustomer,onSetStatus,onReschedule,onCompleteTestDrive}){
   const completed=e.status==='completed', cancelled=e.status==='cancelled';
   return <div className={`calendarEvent ${completed?'eventCompleted':''} ${cancelled?'eventCancelled':''}`}>
     <div className="timeBlock"><b>{fmtTime(e.starts_at)}</b><span>bis {fmtTime(e.ends_at)}</span></div>
     <div className="eventAccent"/>
     <div className="eventInfo">
-      <div className="eventStatusRow">
-        <span className={`statusBadge ${completed?'green':cancelled?'neutral':'blue'}`}>{completed?'✓ Probefahrt erfolgt':cancelled?'Abgesagt':e.event_type==='test_drive'?'Probefahrt':'Termin'}</span>
-      </div>
+      <div className="eventStatusRow"><span className={`statusBadge ${completed?'green':cancelled?'neutral':'blue'}`}>{completed?'✓ Probefahrt erfolgt':cancelled?'Abgesagt':e.event_type==='test_drive'?'Probefahrt':'Termin'}</span></div>
       <h3>{e.title}</h3>
       {customer?<button className="customerLink" onClick={()=>onOpenCustomer(customer)}>{customer.name}{customer.customer_number?` · KD ${customer.customer_number}`:''}</button>:<span className="muted">Kein Kunde zugeordnet</span>}
       <small>{customer?.phone||''}{customer?.phone&&' · '}{e.vehicle||customer?.vehicle_interest||''}</small>
       {cancelled&&e.cancelled_reason&&<small className="cancelReason">Grund: {e.cancelled_reason}</small>}
-      {e.event_type==='test_drive'&&!completed&&!cancelled&&<div className="eventActions"><button className="btn primary" onClick={()=>onSetStatus(e,'completed')}>✓ Probefahrt erfolgt</button><button className="btn soft" onClick={()=>onSetStatus(e,'cancelled')}>Kunde hat abgesagt</button></div>}
+      {e.event_type==='test_drive'&&!completed&&!cancelled&&<div className="eventActions"><button className="btn primary" onClick={()=>onCompleteTestDrive(e)}>✓ Probefahrt erfolgt</button><button className="btn soft" onClick={()=>onReschedule(e)}>Verschieben</button><button className="btn ghost" onClick={()=>onSetStatus(e,'cancelled')}>Kunde hat abgesagt</button></div>}
     </div>
   </div>;
 }
@@ -587,12 +683,12 @@ function TeamView({email}){
   </div>;
 }
 
-function CustomerDetail({customer,history,tasks,onClose,onEdit,onMail,onQuick}){
+function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,onMail,onQuick,onUpload,onOpenDocument,onPurchase,onDeliveryStart,onDeliveryComplete,onWait}){
   const stage=STAGES[customer.stage]||STAGES.lead;
   return <div className="drawerBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
     <aside className="drawer">
       <div className="drawerHead"><div><span className={`statusBadge ${stage.tone}`}>{stage.label}</span><h2>{customer.name}</h2><p>{customer.customer_number?`Kundennummer ${customer.customer_number}`:'Interessent · Kundennummer folgt beim Kauf'}</p></div><button className="closeButton" onClick={onClose}>×</button></div>
-      <div className="drawerActions"><button className="btn primary" onClick={onEdit}>Bearbeiten</button><button className="btn soft" onClick={onMail}>E-Mail erstellen</button></div>
+      <div className="drawerActions"><button className="btn primary" onClick={onEdit}>Bearbeiten</button><button className="btn soft" onClick={onMail}>E-Mail erstellen</button><button className="btn ghost" onClick={()=>onWait(customer)}>{customer.waiting_on_customer?'Warten beenden':'Wartet auf Kunde'}</button></div>
       <DetailSection title="Kontakt"><DetailRow label="Telefon" value={customer.phone}/><DetailRow label="E-Mail" value={customer.email}/></DetailSection>
       <DetailSection title="Fahrzeug"><DetailRow label="Fahrzeuginteresse" value={customer.vehicle_interest}/><DetailRow label="Gekauftes Fahrzeug" value={customer.purchased_vehicle}/><DetailRow label="Notizen" value={customer.notes}/></DetailSection>
       <DetailSection title="Termine & Vertrag">
@@ -601,6 +697,17 @@ function CustomerDetail({customer,history,tasks,onClose,onEdit,onMail,onQuick}){
         <DetailRow label="Geplante Auslieferung" value={customer.planned_delivery_at?fmtDateTime(customer.planned_delivery_at):null}/>
         <DetailRow label="Auslieferungsdatum" value={customer.delivered_at?fmtDate(customer.delivered_at):null}/>
         <DetailRow label="Vertragsende Leasing / Finanzierung" value={customer.contract_end_date?fmtDate(customer.contract_end_date):null}/>
+        {customer.planned_delivery_at&&<DeliveryChecklist checklist={customer.delivery_checklist}/>}
+      </DetailSection>
+      <DetailSection title="AVA Verkaufsassistent">
+        <div className="assistantActionGrid">
+          {!['ordered','customer'].includes(customer.stage)&&<button onClick={()=>onPurchase(customer)}><span>✓</span><b>Kaufabschluss</b><small>Kundennummer + gekauftes Fahrzeug</small></button>}
+          {customer.stage==='ordered'&&<button onClick={()=>onDeliveryStart(customer)}><span>🚗</span><b>Auslieferung planen</b><small>AVA erstellt die Vorbereitung</small></button>}
+          {customer.stage==='ordered'&&customer.planned_delivery_at&&<button onClick={()=>onDeliveryComplete(customer)}><span>✓</span><b>Auslieferung erfolgt</b><small>Nachkontakt morgen</small></button>}
+        </div>
+      </DetailSection>
+      <DetailSection title="Dokumente & Angebote">
+        <OfferDocuments customer={customer} documents={documents} onUpload={onUpload} onOpenDocument={onOpenDocument}/>
       </DetailSection>
       <DetailSection title="Nächste Aktionen">
         <div className="quickGrid"><button onClick={()=>onQuick('offer')}>Angebot nachfassen</button><button onClick={()=>onQuick('test_drive')}>Probefahrt nachfassen</button><button onClick={()=>onQuick('delivery')}>Auslieferung nachfassen</button><button onClick={()=>onQuick('delivery_update')}>Lieferstatus</button></div>
@@ -612,6 +719,24 @@ function CustomerDetail({customer,history,tasks,onClose,onEdit,onMail,onQuick}){
 
     </aside>
   </div>;
+}
+
+function DeliveryChecklist({checklist}){
+  const c=checklist||{};
+  const rows=[['vehicle_ready','Fahrzeug / Aufbereitung'],['documents_ready','Papiere'],['registration_ready','Zulassung'],['customer_confirmed','Termin mit Kunde bestätigt']];
+  return <div className="deliveryChecklist">{rows.map(([k,l])=><div key={k}><span className={c[k]?'checkOn':'checkOff'}>{c[k]?'✓':'○'}</span><b>{l}</b></div>)}</div>;
+}
+
+function OfferDocuments({customer,documents,onUpload,onOpenDocument}){
+  const cameraRef=useRef(null),fileRef=useRef(null);
+  return <div className="docArea"><div className="docActions">
+    <button className="docPrimary" onClick={()=>cameraRef.current?.click()}>📷 Angebot scannen</button>
+    <button className="docSecondary" onClick={()=>fileRef.current?.click()}>↑ Angebot hochladen</button>
+    <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={e=>{const f=e.target.files?.[0];if(f)onUpload(customer,f);e.target.value=''}}/>
+    <input ref={fileRef} hidden type="file" accept="application/pdf,image/*" onChange={e=>{const f=e.target.files?.[0];if(f)onUpload(customer,f);e.target.value=''}}/>
+  </div><div className="docList">
+    {documents.length?documents.map(d=><button key={d.id} className="docItem" onClick={()=>onOpenDocument(d)}><span className="docIcon">{d.mime_type==='application/pdf'?'PDF':'IMG'}</span><span className="docMeta"><b>{d.file_name}</b><small>{fmtDateTime(d.created_at)} · Angebot</small></span><span className="docArrow">›</span></button>):<div className="docEmpty">Noch kein Angebot hinterlegt.</div>}
+  </div></div>;
 }
 
 function HistoryButton({history}){
@@ -664,6 +789,7 @@ function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
         <button onClick={()=>setText('Probefahrt mit Rafael Huber morgen um 15 Uhr')}>Probefahrt planen</button>
         <button onClick={()=>setText('Rafael Huber nicht erreicht')}>Nicht erreicht</button>
         <button onClick={()=>setText('Notiz bei Rafael Huber: Kunde möchte am Freitag entscheiden')}>Notiz speichern</button>
+        <button onClick={()=>setText('Max Mustermann hat gekauft, Kundennummer 47182, gekauftes Fahrzeug CX-5')}>Kaufabschluss</button>
         <button onClick={()=>setText('Öffne Rafael Huber')}>Kundenakte öffnen</button>
       </div>
       {result&&<div className="voiceResult">{result}</div>}
