@@ -1,20 +1,14 @@
-# AVA 1.0 Sales Assistant
+# AVA 1.0.1 Productivity Update
 
-Major workflow milestone.
-
-Included:
-- Everything from AVA 0.9 (modern design, mobile voice, prospect voice creation, offer scan/upload, history button, mobile vertical week, customer/vehicle logic).
-- “Jetzt wichtig” only shows due/overdue items.
-- Today appointments show Geplant / Erfolgt / Abgesagt.
-- Test drive: complete with interest rating (hot / undecided / no interest).
-- Interest rating controls intelligent follow-up timing.
-- Test drive can be rescheduled; old reminders/follow-ups are replaced.
-- “Wartet auf Kunde” status.
-- Purchase close workflow asks for customer number and purchased vehicle.
-- Purchase automatically ends irrelevant sales follow-ups and starts delivery-status workflow.
-- Delivery Assistant creates preparation tasks for vehicle, documents/registration and customer confirmation.
-- Delivery completion ends delivery tasks and creates next-day follow-up.
-- Voice can mark a purchase and set “Wartet auf Kunde”.
-- Existing offer/document workflow remains customer-record based.
+New:
+- Personal To-do list on the Today screen
+- Add, complete, reopen and delete personal To-dos
+- To-dos are separate from AVA's automatic customer/workflow tasks
+- No date means today
+- Overdue unfinished To-dos remain visible instead of disappearing
+- Voice examples:
+  - "To-do für heute: CX-5 auf den Hof stellen"
+  - "Erinnere mich morgen daran, Preisschild CX-60 machen"
+- Existing AVA 1.0 Sales Assistant functionality retained
 
 Use fictional test data only during alpha.

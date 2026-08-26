@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.0</div>
+      <div className="versionPill">Alpha 1.0.1</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -89,6 +89,7 @@ function Dashboard({session}){
   const [events,setEvents]=useState([]);
   const [history,setHistory]=useState([]);
   const [documents,setDocuments]=useState([]);
+  const [todos,setTodos]=useState([]);
   const [busy,setBusy]=useState(true);
   const [week,setWeek]=useState(false);
   const [showForm,setShowForm]=useState(false);
@@ -105,14 +106,15 @@ function Dashboard({session}){
 
   async function load(){
     setBusy(true);
-    const [c,t,e,h,d]=await Promise.all([
+    const [c,t,e,h,d,td]=await Promise.all([
       supabase.from('ava_customers').select('*').eq('owner_id',uid).order('created_at',{ascending:false}),
       supabase.from('ava_tasks').select('*').eq('assigned_to',uid).order('due_at'),
       supabase.from('ava_events').select('*').eq('owner_id',uid).order('starts_at'),
       supabase.from('ava_history').select('*').eq('actor_id',uid).order('created_at',{ascending:false}),
-      supabase.from('ava_documents').select('*').eq('owner_id',uid).order('created_at',{ascending:false})
+      supabase.from('ava_documents').select('*').eq('owner_id',uid).order('created_at',{ascending:false}),
+      supabase.from('ava_todos').select('*').eq('user_id',uid).order('created_at',{ascending:false})
     ]);
-    setCustomers(c.data||[]); setTasks(t.data||[]); setEvents(e.data||[]); setHistory(h.data||[]); setDocuments(d.data||[]);
+    setCustomers(c.data||[]); setTasks(t.data||[]); setEvents(e.data||[]); setHistory(h.data||[]); setDocuments(d.data||[]); setTodos(td.data||[]);
     setBusy(false);
   }
 
@@ -276,6 +278,32 @@ function Dashboard({session}){
     const q=choice.toLowerCase();
     const interest=q.includes('heiß')||q.includes('heiss')?'hot':q.includes('unentsch')?'undecided':'cold';
     const {error}=await supabase.rpc('ava_complete_test_drive',{p_event_id:event.id,p_interest:interest});
+    if(error)alert(error.message);else await load();
+  }
+
+  async function addTodo(){
+    const title=window.prompt('Was möchtest du erledigen?');
+    if(!title)return;
+    const when=window.prompt('Für wann? Leer = heute, oder YYYY-MM-DD');
+    let due=new Date(); due.setHours(12,0,0,0);
+    if(when&&when.trim()){
+      const parsed=new Date(when+'T12:00:00');
+      if(Number.isNaN(parsed.getTime())){alert('Datum konnte nicht erkannt werden.');return}
+      due=parsed;
+    }
+    const {error}=await supabase.from('ava_todos').insert({user_id:uid,title,due_date:due.toISOString().slice(0,10)});
+    if(error)alert(error.message);else await load();
+  }
+
+  async function toggleTodo(todo){
+    const next=todo.status==='done'?'open':'done';
+    const {error}=await supabase.from('ava_todos').update({status:next,completed_at:next==='done'?new Date().toISOString():null}).eq('id',todo.id);
+    if(error)alert(error.message);else await load();
+  }
+
+  async function deleteTodo(todo){
+    if(!window.confirm('To-do löschen?'))return;
+    const {error}=await supabase.from('ava_todos').delete().eq('id',todo.id);
     if(error)alert(error.message);else await load();
   }
 
@@ -466,6 +494,16 @@ function Dashboard({session}){
       setVoiceResult(`${c.name} steht jetzt auf „Wartet auf Kunde“.`);await load();return;
     }
 
+    if(q.includes('to-do')||q.includes('todo')||q.includes('erinnere mich')){
+      let title=text.replace(/^.*?(?:to-do|todo|erinnere mich(?: daran)?)/i,'').replace(/^[:\s,-]+/,'').trim();
+      let due=new Date();due.setHours(12,0,0,0);
+      if(q.includes('morgen'))due.setDate(due.getDate()+1);
+      if(!title){setVoiceResult('Was soll ich als To-do speichern?');return}
+      const {error}=await supabase.from('ava_todos').insert({user_id:uid,title,due_date:due.toISOString().slice(0,10)});
+      if(error)setVoiceResult(error.message);else{setVoiceResult(`✓ To-do gespeichert: ${title}`);await load()}
+      return;
+    }
+
     if((q.includes('öffne')||q.includes('oeffne')||q.includes('zeige'))&&c){
       setDetail(c);setVoiceOpen(false);setVoiceResult('');return;
     }
@@ -512,7 +550,7 @@ function Dashboard({session}){
     <main className="workspace">
       <Topbar tab={tab} onNew={fresh} onVoice={()=>{setVoiceOpen(true);setVoiceResult('')}}/>
       {busy?<LoadingState/>:<>
-        {tab==='Heute'&&<TodayView openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
+        {tab==='Heute'&&<TodayView openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
         {tab==='Kunden'&&<CustomersView customers={filteredCustomers} search={search} setSearch={setSearch} onOpen={setDetail} onEdit={edit} onMail={openMail} onNew={fresh}/>}
         {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} week={week} setWeek={setWeek} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive}/>}        {tab==='Team'&&<TeamView email={session.user.email}/>}
       </>}
@@ -540,7 +578,7 @@ function Topbar({tab,onNew,onVoice}){
   </header>;
 }
 
-function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
+function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,todos,onAddTodo,onToggleTodo,onDeleteTodo,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
   return <div className="page">
     <div className="heroRow">
       <div><span className="eyebrow">Heute im Verkauf</span><h1>Mehr Zeit für den Verkauf.</h1><p>AVA erinnert, organisiert und hält dir den Rücken frei – damit du dich auf deine Kunden konzentrieren kannst.</p></div>
@@ -553,6 +591,10 @@ function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,o
       <Metric n={contractAlerts.length} label="Vertragschancen" sub="ca. 6 Monate vorher"/>
     </div>
 
+    <section className="todoSection">
+      <div className="sectionTitle"><h2>Meine To-dos</h2><button className="btn soft smallBtn" onClick={onAddTodo}>+ Hinzufügen</button></div>
+      <TodoList todos={todos} onToggle={onToggleTodo} onDelete={onDeleteTodo}/>
+    </section>
     <div className="twoCol">
       <section>
         <SectionTitle title="Jetzt wichtig" hint="Priorisierte Aufgaben"/>
@@ -571,6 +613,23 @@ function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,o
         </>}
       </aside>
     </div>
+  </div>;
+}
+
+function TodoList({todos,onToggle,onDelete}){
+  const today=new Date();today.setHours(0,0,0,0);
+  const visible=todos.filter(t=>{
+    if(t.status==='done') return false;
+    if(!t.due_date)return true;
+    const d=new Date(t.due_date+'T12:00:00');d.setHours(0,0,0,0);
+    return d<=today;
+  });
+  return <div className="todoList">
+    {visible.length?visible.map(t=><div className="todoItem" key={t.id}>
+      <button className="todoCheck" onClick={()=>onToggle(t)}>○</button>
+      <div className="todoMain"><b>{t.title}</b><span>{t.due_date?fmtDate(t.due_date):'Heute'}</span></div>
+      <button className="todoDelete" onClick={()=>onDelete(t)}>×</button>
+    </div>):<div className="todoEmpty">Keine persönlichen To-dos für heute.</div>}
   </div>;
 }
 
@@ -789,6 +848,7 @@ function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
         <button onClick={()=>setText('Probefahrt mit Rafael Huber morgen um 15 Uhr')}>Probefahrt planen</button>
         <button onClick={()=>setText('Rafael Huber nicht erreicht')}>Nicht erreicht</button>
         <button onClick={()=>setText('Notiz bei Rafael Huber: Kunde möchte am Freitag entscheiden')}>Notiz speichern</button>
+        <button onClick={()=>setText('To-do für heute: CX-5 auf den Hof stellen')}>To-do speichern</button>
         <button onClick={()=>setText('Max Mustermann hat gekauft, Kundennummer 47182, gekauftes Fahrzeug CX-5')}>Kaufabschluss</button>
         <button onClick={()=>setText('Öffne Rafael Huber')}>Kundenakte öffnen</button>
       </div>

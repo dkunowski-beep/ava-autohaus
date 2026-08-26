@@ -114,3 +114,9 @@ body{background:var(--ava-bg)}
 
 /* AVA 1.0 Sales Assistant */
 .assistantActionGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.assistantActionGrid button{border:1px solid var(--line);background:#f5f8fc;border-radius:13px;padding:12px;text-align:left;display:grid;grid-template-columns:28px 1fr;column-gap:8px}.assistantActionGrid button>span{grid-row:1/3;width:28px;height:28px;border-radius:9px;background:#e9f2ff;display:grid;place-items:center}.assistantActionGrid button b{font-size:10px}.assistantActionGrid button small{font-size:8px;color:var(--muted);margin-top:3px}.deliveryChecklist{margin-top:10px;border-top:1px solid #eef0f2;padding-top:9px;display:grid;gap:7px}.deliveryChecklist>div{display:flex;align-items:center;gap:7px}.deliveryChecklist b{font-size:10px}.checkOn{color:#15784b;font-weight:900}.checkOff{color:#9ba2a9}.statusBadge.violet{background:#f1eaff;color:#7047a8}@media(max-width:760px){.assistantActionGrid{grid-template-columns:1fr}}
+
+/* AVA 1.0.1 Personal Todos */
+.todoSection{margin-top:26px}.todoSection .sectionTitle button{margin-left:auto}.todoList{display:grid;gap:8px}
+.todoItem{background:#fff;border:1px solid var(--line);border-radius:14px;padding:11px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 5px 18px rgba(20,26,32,.03)}
+.todoCheck,.todoDelete{border:0;background:transparent}.todoCheck{width:28px;height:28px;border-radius:50%;background:#eef4fb;color:#0b6cff;font-size:18px}.todoDelete{font-size:18px;color:#9aa1a8}
+.todoMain{flex:1;min-width:0}.todoMain b,.todoMain span{display:block}.todoMain b{font-size:12px}.todoMain span{font-size:9px;color:var(--muted);margin-top:3px}.todoEmpty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:16px;color:var(--muted);font-size:10px}
