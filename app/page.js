@@ -237,6 +237,61 @@ function Dashboard({session}){
     }).sort((a,b)=>b.score-a.score).slice(0,3);
   },[customers,events,tasks]);
 
+
+  const avaFocus=useMemo(()=>{
+    const now=new Date();
+    const todayEnd=new Date(); todayEnd.setHours(23,59,59,999);
+    const tomorrowEnd=new Date(todayEnd); tomorrowEnd.setDate(tomorrowEnd.getDate()+1);
+
+    const pareto=(salesRadar||[]).slice(0,Math.max(1,Math.ceil((salesRadar||[]).length*0.2)||1));
+
+    const urgentImportant=[];
+    const importantNotUrgent=[];
+    const urgentLessImportant=[];
+    const later=[];
+
+    (tasks||[]).filter(t=>t.status==='open').forEach(t=>{
+      const due=t.due_at?new Date(t.due_at):null;
+      const customer=customerMap[t.customer_id];
+      const item={key:'task-'+t.id,title:t.title||'Aufgabe',subtitle:customer?`${customer.name}${customer.vehicle_interest?` · ${customer.vehicle_interest}`:''}`:(t.details||''),due,source:'task',customer,raw:t};
+      const urgent=!!due && due<=todayEnd;
+      const important=!!customer || /angebot|probefahrt|ausliefer|rückruf|rueckruf|nachkontakt|vertrag|finanz|leasing/i.test(t.title||'');
+      if(urgent&&important)urgentImportant.push(item);
+      else if(!urgent&&important)importantNotUrgent.push(item);
+      else if(urgent&&!important)urgentLessImportant.push(item);
+      else later.push(item);
+    });
+
+    (events||[]).filter(e=>e.status!=='cancelled').forEach(e=>{
+      const when=new Date(e.starts_at);
+      if(when<now || when>tomorrowEnd)return;
+      const customer=customerMap[e.customer_id];
+      const item={key:'event-'+e.id,title:e.title||'Termin',subtitle:customer?`${customer.name}${customer.vehicle_interest?` · ${customer.vehicle_interest}`:''}`:fmtDateTime(e.starts_at),due:when,source:'event',customer,raw:e};
+      if(when<=todayEnd)urgentImportant.push(item);
+      else importantNotUrgent.push(item);
+    });
+
+    (todos||[]).filter(t=>t.status!=='done').forEach(t=>{
+      const due=t.due_date?new Date(t.due_date+'T12:00:00'):null;
+      const item={key:'todo-'+t.id,title:t.title||'To-do',subtitle:t.assigned_by?'Team-Aufgabe':'Persönliches To-do',due,source:'todo',customer:null,raw:t};
+      const urgent=!!due&&due<=todayEnd;
+      if(t.assigned_by)urgentLessImportant.push(item);
+      else if(urgent)urgentImportant.push(item);
+      else later.push(item);
+    });
+
+    const sortDue=a=>a.sort((x,y)=>(x.due?.getTime?.()||9e15)-(y.due?.getTime?.()||9e15));
+
+    return {
+      pareto,
+      now:sortDue(urgentImportant).slice(0,6),
+      plan:sortDue(importantNotUrgent).slice(0,6),
+      delegate:sortDue(urgentLessImportant).slice(0,6),
+      later:sortDue(later).slice(0,6),
+      total:(tasks||[]).filter(t=>t.status==='open').length+(todos||[]).filter(t=>t.status!=='done').length
+    };
+  },[salesRadar,tasks,events,todos,customerMap]);
+
   const dayCloseSummary=useMemo(()=>{
     const end=new Date();end.setHours(23,59,59,999);
     const tomorrowStart=new Date(end);tomorrowStart.setMilliseconds(1);
@@ -986,7 +1041,7 @@ function Dashboard({session}){
     <main className="workspace">
       <Topbar tab={tab} onNew={fresh} onRefresh={load} onVoice={()=>{setVoiceOpen(true);setVoiceResult('')}} unread={notifications.filter(n=>!n.read_at).length} onNotifications={()=>setNotificationOpen(true)}/>
       {busy?<LoadingState/>:<>
-        {tab==='Heute'&&<TodayView salesRadar={salesRadar} onCoach={c=>setCoachCustomer(c)} openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} teamMembers={teamMembers} uid={uid} onCompleteAssigned={completeAssignedTodo} smartRecommendations={smartRecommendations} dayCloseSummary={dayCloseSummary} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
+        {tab==='Heute'&&<TodayView avaFocus={avaFocus} salesRadar={salesRadar} onCoach={c=>setCoachCustomer(c)} openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} teamMembers={teamMembers} uid={uid} onCompleteAssigned={completeAssignedTodo} smartRecommendations={smartRecommendations} dayCloseSummary={dayCloseSummary} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
         {tab==='Kunden'&&<CustomersView customers={filteredCustomers} search={search} setSearch={setSearch} onOpen={setDetail} onEdit={edit} onMail={openMail} onNew={fresh}/>}
         {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} calendarMode={calendarMode} setCalendarMode={setCalendarMode} calendarDate={calendarDate} setCalendarDate={setCalendarDate} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive} onNewEvent={(date)=>{setEditingEvent(null);if(date)setCalendarDate(date);setCalendarFormOpen(true)}} onEditEvent={(e)=>{setEditingEvent(e);setCalendarFormOpen(true)}} onDeleteEvent={deleteCalendarEvent}/>}        {tab==='Team'&&<TeamView uid={uid} members={teamMembers} messages={teamMessages} todos={todos} recipient={teamRecipient} setRecipient={setTeamRecipient} text={teamText} setText={setTeamText} asTask={teamAsTask} setAsTask={setTeamAsTask} onSend={sendTeamMessage} onRead={markTeamMessageRead} onDeleteMessage={hideTeamMessage} onCompleteTodo={completeAssignedTodo}/>}
       </>}
@@ -1018,7 +1073,7 @@ function Topbar({tab,onNew,onRefresh,onVoice,unread,onNotifications}){
   </header>;
 }
 
-function TodayView({salesRadar,onCoach,openTasks,todayEvents,customers,contractAlerts,customerMap,todos,teamMembers,uid,onCompleteAssigned,smartRecommendations,dayCloseSummary,onAddTodo,onToggleTodo,onDeleteTodo,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
+function TodayView({avaFocus,salesRadar,onCoach,openTasks,todayEvents,customers,contractAlerts,customerMap,todos,teamMembers,uid,onCompleteAssigned,smartRecommendations,dayCloseSummary,onAddTodo,onToggleTodo,onDeleteTodo,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
   return <div className="page">
     <div className="heroRow">
       <div><span className="eyebrow">Heute im Verkauf</span><h1>Mehr Zeit für den Verkauf.</h1><p>AVA erinnert, organisiert und hält dir den Rücken frei – damit du dich auf deine Kunden konzentrieren kannst.</p></div>
@@ -1030,6 +1085,28 @@ function TodayView({salesRadar,onCoach,openTasks,todayEvents,customers,contractA
       <Metric n={customers.length} label="Meine Kunden" sub="aktive Datensätze"/>
       <Metric n={contractAlerts.length} label="Vertragschancen" sub="ca. 6 Monate vorher"/>
     </div>
+
+    <section className="avaFocusSection">
+      <div className="sectionTitle"><div><span className="eyebrow">AVA Fokus · Pareto + Eisenhower</span><h2>⚡ Was bringt dich heute wirklich weiter?</h2></div><span>{avaFocus?.total||0} offene Punkte bewertet</span></div>
+
+      <div className="paretoFocus">
+        <div className="paretoLead"><span>80/20 Fokus</span><b>Konzentriere dich zuerst auf die wenigen Vorgänge mit dem größten Abschlusshebel.</b></div>
+        <div className="paretoCards">
+          {(avaFocus?.pareto||[]).length?(avaFocus.pareto.map((r,i)=><button key={r.customer.id} className="paretoCard" onClick={()=>onOpenCustomer(r.customer)}>
+            <span>#{i+1} · {r.score}%</span>
+            <b>{r.customer.name}</b>
+            <small>{r.action}</small>
+          </button>)):<span className="muted">Noch nicht genug offene Verkaufschancen für eine 80/20-Auswertung.</span>}
+        </div>
+      </div>
+
+      <div className="eisenhowerGrid">
+        <FocusQuadrant tone="red" icon="🔴" title="JETZT" subtitle="wichtig + dringend" items={avaFocus?.now||[]} onOpenCustomer={onOpenCustomer}/>
+        <FocusQuadrant tone="blue" icon="🔵" title="PLANEN" subtitle="wichtig + nicht dringend" items={avaFocus?.plan||[]} onOpenCustomer={onOpenCustomer}/>
+        <FocusQuadrant tone="amber" icon="🟠" title="DELEGIEREN" subtitle="dringend + weniger wichtig" items={avaFocus?.delegate||[]} onOpenCustomer={onOpenCustomer}/>
+        <FocusQuadrant tone="gray" icon="⚪" title="SPÄTER" subtitle="nicht dringend + weniger wichtig" items={avaFocus?.later||[]} onOpenCustomer={onOpenCustomer}/>
+      </div>
+    </section>
 
     <section className="salesRadarSection">
       <div className="sectionTitle"><div><span className="eyebrow">AVA Sales Radar</span><h2>🔥 Deine besten Verkaufschancen</h2></div><span>automatisch priorisiert</span></div>
@@ -1590,6 +1667,19 @@ function NotificationToggle({label,value,onChange}){return <label className="not
 function MobileNav({tab,setTab}){
   const items=[['Heute','⌂'],['Kalender','▦'],['Kunden','◉'],['Team','◇']];
   return <nav className="mobileNav">{items.slice(0,2).map(([l,i])=><button key={l} className={tab===l?'active':''} onClick={()=>setTab(l)}><span>{i}</span>{l}</button>)}<button className="mobileVoice" onClick={()=>window.dispatchEvent(new CustomEvent('ava-open-voice'))}><span>🎙</span>AVA</button>{items.slice(2).map(([l,i])=><button key={l} className={tab===l?'active':''} onClick={()=>setTab(l)}><span>{i}</span>{l}</button>)}</nav>;
+}
+
+function FocusQuadrant({tone,icon,title,subtitle,items,onOpenCustomer}){
+  return <div className={`focusQuadrant ${tone}`}>
+    <div className="focusQuadrantHead"><div><span>{icon}</span><b>{title}</b></div><small>{subtitle}</small></div>
+    <div className="focusQuadrantList">
+      {items.length?items.map(i=><button key={i.key} className="focusItem" onClick={()=>i.customer&&onOpenCustomer(i.customer)}>
+        <b>{i.title}</b>
+        <span>{i.subtitle||'—'}</span>
+        {i.due&&<small>{fmtDateTime(i.due)}</small>}
+      </button>):<span className="muted">Aktuell nichts hier.</span>}
+    </div>
+  </div>;
 }
 
 function Metric({n,label,sub}){return <div className="metric"><div className="metricNumber">{n}</div><b>{label}</b><span>{sub}</span></div>}
