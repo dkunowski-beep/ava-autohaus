@@ -1,9 +1,13 @@
-# AVA 1.3.7 — iPhone Voice Apply Fix
+# AVA 1.3.8 — Refresh + Calendar Edit
 
-- The mobile confirmation button now has a real async execution wrapper.
-- Shows “AVA übernimmt den Befehl…” and “Wird übernommen…” while saving.
-- Catches and displays execution errors instead of appearing to do nothing.
-- Normalizes iPhone dictation punctuation/quotes.
-- More tolerant intent detection for “Interessent/Kunde anlegen”.
-- Clears the recognized command after a successful prospect creation while retaining the success message.
-- Keeps all 1.3.6 voice confirmation UI and 1.3.5 VAPID changes.
+New:
+- Global “↻ Alles aktualisieren” button in the top bar.
+- Reloads the complete AVA workspace: customers, calendar, todos, team messages and notifications.
+- Compact refresh icon on mobile.
+- Calendar appointments are editable again.
+- Day view: explicit “Termin bearbeiten” button.
+- Week view: tap/click appointment to edit.
+- Month view: tap/click appointment to edit.
+- Edit form supports title, date/time, duration, appointment type, customer assignment and notes.
+
+All AVA 1.3.7 iPhone Voice fixes and 1.3.5 push/VAPID changes remain included.
