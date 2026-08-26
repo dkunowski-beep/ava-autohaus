@@ -169,3 +169,31 @@ input::placeholder,textarea::placeholder{color:#52657b!important}
 /* AVA 1.1.1 Calendar */
 .calendarTopActions{display:flex;gap:10px;align-items:center}.compactModal{width:min(650px,100%)}.compactModal textarea{min-height:72px}
 @media(max-width:760px){.pageTitleRow .calendarTopActions{display:flex;margin-top:14px;justify-content:space-between}.calendarTopActions>.btn{flex:1}.calendarTopActions .segmented{flex:0 0 auto}}
+
+/* AVA 1.1.3 Calendar UX */
+.calendarNavigator{display:flex;align-items:center;justify-content:space-between;margin:18px 0 10px}
+.navButtons{display:flex;gap:7px;align-items:center}.navButtons button{border:1px solid #1b3d60;background:#0a1725;color:#d9ecff;border-radius:10px;padding:8px 12px;font-weight:850}.navButtons .todayBtn{color:#66b8ff}.monthTitle{font-size:17px;font-weight:900;color:#f3f8ff;text-transform:capitalize}
+.monthBoard{background:#06101b;border:1px solid #142a42;border-radius:18px;overflow:hidden;box-shadow:0 16px 42px rgba(0,0,0,.18)}
+.monthWeekdays{display:grid;grid-template-columns:repeat(7,1fr);background:#071522;border-bottom:1px solid #15314e}.monthWeekdays div{padding:10px;text-align:center;font-size:9px;font-weight:900;color:#6faee9;text-transform:uppercase}
+.monthGrid{display:grid;grid-template-columns:repeat(7,1fr)}.monthCell{min-height:132px;border-right:1px solid #10263b;border-bottom:1px solid #10263b;padding:8px;background:#07111d}.monthCell:nth-child(7n){border-right:0}.emptyCell{background:#040b13}.todayCell{background:linear-gradient(180deg,#0a1a2b,#081522);box-shadow:inset 0 0 0 1px #1a78d8}
+.monthDayNumber{font-size:12px;font-weight:900;color:#e8f4ff;margin-bottom:7px}.todayCell .monthDayNumber{color:#55b4ff}
+.monthEvents{display:grid;gap:5px}.monthEvent{border:1px solid #1d4f7c;background:#0b2540;color:#e8f5ff;border-radius:8px;padding:6px;text-align:left;overflow:hidden}.monthEvent b{display:block;font-size:9px;color:#60b8ff}.monthEvent span{display:block;font-size:9px;font-weight:850;color:#f2f8ff;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.monthEvent small{display:block;font-size:8px;color:#9cb5cf;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.monthEvent.cancelled{background:#2b0e14;border-color:#6a2530;opacity:.85}.monthEvent.cancelled span{color:#ff9aa2}.monthEvent.completed{background:#08271e;border-color:#1d6148}.monthEvent.completed span{color:#8ee2b9}.moreEvents{font-size:8px;color:#6ea6d7;padding:2px 4px}
+.weekColumn{background:#07111d!important}.weekHead span,.weekHead b{color:#dbeeff!important}.weekEvent span{color:#edf7ff!important}.weekEvent small{color:#9ab3cf!important}.weekEvent b{color:#58b0ff!important}
+@media(max-width:900px){.monthCell{min-height:110px}.monthEvent small{display:none}}
+@media(max-width:760px){
+ .calendarNavigator{align-items:flex-start;gap:10px;flex-direction:column}.monthTitle{font-size:15px}
+ .monthBoard{overflow-x:auto}.monthWeekdays,.monthGrid{min-width:720px}
+ .monthCell{min-height:108px}
+}
+
+/* AVA 1.1.4 Calendar Pro */
+.segmented.three{grid-template-columns:repeat(3,1fr)}
+.monthDayHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}.monthDayNumber,.monthAdd{border:0;background:transparent}.monthDayNumber{font-size:12px;font-weight:900;color:#e8f4ff;padding:0}.monthDayNumber:hover{color:#58b7ff}.monthAdd{width:22px;height:22px;border-radius:7px;color:#67b9ff;background:#0b2036;font-weight:900;opacity:.65}.monthAdd:hover{opacity:1;background:#0c3155}
+.dayAgendaSurface{background:#06101b;border:1px solid #142a42;border-radius:18px;overflow:hidden;box-shadow:0 16px 42px rgba(0,0,0,.18)}.dayAgendaHead{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 18px;border-bottom:1px solid #15314e;background:#071522}.dayAgendaHead span,.dayAgendaHead b{display:block}.dayAgendaHead span{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#5ca8ec}.dayAgendaHead b{font-size:15px;margin-top:3px;color:#edf7ff}.dayAgendaList{padding:8px 18px 18px}.dayAgendaWrap{border-bottom:1px solid #10263b}.dayAgendaWrap:last-child{border-bottom:0}.eventManage{display:flex;gap:8px;padding:0 0 12px 95px}.eventManage button{border:0;background:#0b1b2b;color:#7fbfff;border-radius:8px;padding:6px 9px;font-size:9px;font-weight:800}.eventManage .dangerText{color:#ff8d96;background:#240d12}
+.calendarTopActions .segmented{display:grid}
+.weekBoard{grid-template-columns:repeat(7,1fr)}
+@media(max-width:760px){
+ .calendarTopActions{width:100%;flex-wrap:wrap}.calendarTopActions>.btn{flex:1 1 100%}.calendarTopActions .segmented{width:100%}
+ .dayAgendaHead{align-items:flex-start;flex-direction:column}.eventManage{padding-left:0}
+ .weekBoard{display:grid!important;grid-template-columns:1fr!important}.weekColumn{width:100%!important}
+}

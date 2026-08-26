@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.1.1</div>
+      <div className="versionPill">Alpha 1.1.4</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -92,6 +92,9 @@ function Dashboard({session}){
   const [todos,setTodos]=useState([]);
   const [busy,setBusy]=useState(true);
   const [week,setWeek]=useState(false);
+  const [calendarDate,setCalendarDate]=useState(new Date());
+  const [calendarMode,setCalendarMode]=useState('month');
+  const [editingEvent,setEditingEvent]=useState(null);
   const [showForm,setShowForm]=useState(false);
   const [selected,setSelected]=useState(null);
   const [detail,setDetail]=useState(null);
@@ -322,10 +325,39 @@ function Dashboard({session}){
   }
 
   async function createManualEvent(payload){
+    const starts=new Date(payload.starts_at);
+    if(Number.isNaN(starts.getTime())){alert('Bitte Datum und Uhrzeit prüfen.');return false}
+    const minutes=Number(payload.minutes||60);
+    const ends=new Date(starts.getTime()+minutes*60000);
+
+    // client-side overlap check for a faster message
+    const clash=events.find(e=>e.id!==editingEvent?.id && new Date(e.starts_at)<ends && new Date(e.ends_at)>starts);
+    if(clash){
+      alert(`Terminüberschneidung mit „${clash.title}“ um ${fmtTime(clash.starts_at)}.`);
+      return false;
+    }
+
+    if(editingEvent){
+      const {error}=await supabase.from('ava_events').update({
+        title:payload.title,
+        starts_at:starts.toISOString(),
+        ends_at:ends.toISOString(),
+        customer_id:payload.customer_id||null,
+        event_type:payload.event_type||'appointment',
+        notes:payload.notes||null
+      }).eq('id',editingEvent.id);
+      if(error){alert(error.message);return false}
+      await supabase.from('ava_history').insert({
+        customer_id:payload.customer_id||editingEvent.customer_id||null,
+        actor_id:uid,action:'Termin geändert',details:`${payload.title} · ${starts.toLocaleString('de-DE')}`
+      });
+      setEditingEvent(null);setCalendarFormOpen(false);await load();return true;
+    }
+
     const {error}=await supabase.rpc('ava_create_calendar_event',{
       p_title:payload.title,
-      p_starts_at:new Date(payload.starts_at).toISOString(),
-      p_minutes:Number(payload.minutes||60),
+      p_starts_at:starts.toISOString(),
+      p_minutes:minutes,
       p_customer_id:payload.customer_id||null,
       p_event_type:payload.event_type||'appointment',
       p_notes:payload.notes||null
@@ -335,6 +367,18 @@ function Dashboard({session}){
       return false;
     }
     setCalendarFormOpen(false);await load();return true;
+  }
+
+  async function deleteCalendarEvent(event){
+    if(!window.confirm(`Termin „${event.title}“ wirklich löschen?`))return;
+    const {error}=await supabase.from('ava_events').delete().eq('id',event.id);
+    if(error){alert(error.message);return}
+    if(event.customer_id){
+      await supabase.from('ava_history').insert({
+        customer_id:event.customer_id,actor_id:uid,action:'Termin gelöscht',details:`${event.title} · ${fmtDateTime(event.starts_at)}`
+      });
+    }
+    await load();
   }
 
   function taskCustomer(t){return customerMap[t.customer_id]||null}
@@ -602,13 +646,13 @@ function Dashboard({session}){
       {busy?<LoadingState/>:<>
         {tab==='Heute'&&<TodayView openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
         {tab==='Kunden'&&<CustomersView customers={filteredCustomers} search={search} setSearch={setSearch} onOpen={setDetail} onEdit={edit} onMail={openMail} onNew={fresh}/>}
-        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} week={week} setWeek={setWeek} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive} onNewEvent={()=>setCalendarFormOpen(true)}/>}        {tab==='Team'&&<TeamView email={session.user.email}/>}
+        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} calendarMode={calendarMode} setCalendarMode={setCalendarMode} calendarDate={calendarDate} setCalendarDate={setCalendarDate} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive} onNewEvent={(date)=>{setEditingEvent(null);if(date)setCalendarDate(date);setCalendarFormOpen(true)}} onEditEvent={(e)=>{setEditingEvent(e);setCalendarFormOpen(true)}} onDeleteEvent={deleteCalendarEvent}/>}        {tab==='Team'&&<TeamView email={session.user.email}/>}
       </>}
     </main>
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
     {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
-    {calendarFormOpen&&<CalendarEventForm customers={customers} onClose={()=>setCalendarFormOpen(false)} onSave={createManualEvent}/>}
+    {calendarFormOpen&&<CalendarEventForm customers={customers} event={editingEvent} defaultDate={calendarDate} onClose={()=>{setCalendarFormOpen(false);setEditingEvent(null)}} onSave={createManualEvent}/>}
     {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} onListen={startVoice} onRun={runVoiceCommand} onClose={()=>{stopVoice();setVoiceOpen(false)}}/>}
   </div>;
 }
@@ -739,37 +783,106 @@ function CustomerCard({c,onOpen,onEdit,onMail}){
   </article>;
 }
 
-function CalendarEventForm({customers,onClose,onSave}){
-  const [form,setForm]=useState({title:'',starts_at:'',minutes:60,customer_id:'',event_type:'appointment',notes:''});
+function CalendarEventForm({customers,event,defaultDate,onClose,onSave}){
+  function localValue(v){
+    if(!v)return '';
+    const d=new Date(v);
+    const pad=n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  const defaultStart=event?.starts_at?localValue(event.starts_at):(()=>{
+    const d=new Date(defaultDate||new Date());
+    if(d.getHours()===0&&d.getMinutes()===0)d.setHours(10,0,0,0);
+    return localValue(d);
+  })();
+  const eventMinutes=event?.starts_at&&event?.ends_at?Math.max(15,Math.round((new Date(event.ends_at)-new Date(event.starts_at))/60000)):60;
+  const [form,setForm]=useState({
+    title:event?.title||'',
+    starts_at:defaultStart,
+    minutes:eventMinutes,
+    customer_id:event?.customer_id||'',
+    event_type:event?.event_type||'appointment',
+    notes:event?.notes||''
+  });
   const set=(k,v)=>setForm({...form,[k]:v});
   async function submit(e){e.preventDefault();await onSave(form)}
   return <div className="modalBackdrop"><form className="customerModal compactModal" onSubmit={submit}>
-    <div className="modalHead"><div><span className="eyebrow">Kalender</span><h2>Termin anlegen</h2><p>Kunde ist optional. AVA prüft Terminüberschneidungen automatisch.</p></div><button type="button" className="closeButton" onClick={onClose}>×</button></div>
+    <div className="modalHead"><div><span className="eyebrow">Kalender</span><h2>{event?'Termin bearbeiten':'Termin anlegen'}</h2><p>Kunde ist optional. AVA prüft Terminüberschneidungen automatisch.</p></div><button type="button" className="closeButton" onClick={onClose}>×</button></div>
     <div className="formSection"><div className="formGrid">
       <Field label="Titel" full><input required value={form.title} onChange={e=>set('title',e.target.value)} placeholder="z. B. Teammeeting, Beratung, Rückruf"/></Field>
       <Field label="Datum & Uhrzeit"><input required type="datetime-local" value={form.starts_at} onChange={e=>set('starts_at',e.target.value)}/></Field>
-      <Field label="Dauer"><select value={form.minutes} onChange={e=>set('minutes',e.target.value)}><option value="30">30 Minuten</option><option value="45">45 Minuten</option><option value="60">60 Minuten</option><option value="90">90 Minuten</option><option value="120">2 Stunden</option></select></Field>
+      <Field label="Dauer"><select value={form.minutes} onChange={e=>set('minutes',e.target.value)}><option value="15">15 Minuten</option><option value="30">30 Minuten</option><option value="45">45 Minuten</option><option value="60">60 Minuten</option><option value="90">90 Minuten</option><option value="120">2 Stunden</option></select></Field>
       <Field label="Terminart"><select value={form.event_type} onChange={e=>set('event_type',e.target.value)}><option value="appointment">Termin</option><option value="consultation">Beratung</option><option value="callback">Rückruf</option><option value="meeting">Besprechung</option><option value="delivery">Fahrzeugübergabe</option><option value="internal">Interner Termin</option></select></Field>
       <Field label="Kunde / Interessent" hint="Optional"><select value={form.customer_id} onChange={e=>set('customer_id',e.target.value)}><option value="">Kein Kunde zugeordnet</option>{customers.map(c=><option key={c.id} value={c.id}>{c.name}{c.customer_number?` · KD ${c.customer_number}`:''}</option>)}</select></Field>
       <Field label="Notiz" full><textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Optional…"/></Field>
     </div></div>
-    <div className="modalFoot"><span>AVA prüft vorhandene Termine vor dem Speichern.</span><div><button type="button" className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary">Termin speichern</button></div></div>
+    <div className="modalFoot"><span>AVA prüft vorhandene Termine vor dem Speichern.</span><div><button type="button" className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary">{event?'Änderungen speichern':'Termin speichern'}</button></div></div>
   </form></div>;
 }
 
-function CalendarView({events,customerMap,week,setWeek,onOpenCustomer,onSetStatus,onReschedule,onCompleteTestDrive,onNewEvent}){
-  const today=new Date();
-  const dayEvents=events.filter(e=>new Date(e.starts_at).toDateString()===today.toDateString());
+function CalendarView({events,customerMap,calendarMode,setCalendarMode,calendarDate,setCalendarDate,onOpenCustomer,onSetStatus,onReschedule,onCompleteTestDrive,onNewEvent,onEditEvent,onDeleteEvent}){
+  function move(delta){
+    const d=new Date(calendarDate);
+    if(calendarMode==='month')d.setMonth(d.getMonth()+delta);
+    else if(calendarMode==='week')d.setDate(d.getDate()+delta*7);
+    else d.setDate(d.getDate()+delta);
+    setCalendarDate(d);
+  }
+  function goToday(){setCalendarDate(new Date())}
+  const title=calendarMode==='month'
+    ?calendarDate.toLocaleDateString('de-DE',{month:'long',year:'numeric'})
+    :calendarMode==='week'
+      ?`Woche ab ${startOfWeek(calendarDate).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'})}`
+      :calendarDate.toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
   return <div className="page">
-    <div className="pageTitleRow"><div><span className="eyebrow">Terminplanung</span><h1>Kalender</h1><p>Probefahrten, Auslieferungen und persönliche Termine an einem Ort.</p></div><div className="calendarTopActions"><button className="btn primary" onClick={onNewEvent}>+ Termin</button><div className="segmented"><button className={!week?'active':''} onClick={()=>setWeek(false)}>Tag</button><button className={week?'active':''} onClick={()=>setWeek(true)}>Woche</button></div></div></div>
-    {!week?<DayCalendar events={dayEvents} customerMap={customerMap} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus} onReschedule={onReschedule} onCompleteTestDrive={onCompleteTestDrive}/>:<WeekCalendar events={events} customerMap={customerMap} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus}/>}
+    <div className="pageTitleRow">
+      <div><span className="eyebrow">Terminplanung</span><h1>Kalender</h1><p>Probefahrten, Auslieferungen und persönliche Termine an einem Ort.</p></div>
+      <div className="calendarTopActions"><button className="btn primary" onClick={()=>onNewEvent(calendarDate)}>+ Termin</button><div className="segmented three"><button className={calendarMode==='day'?'active':''} onClick={()=>setCalendarMode('day')}>Tag</button><button className={calendarMode==='week'?'active':''} onClick={()=>setCalendarMode('week')}>Woche</button><button className={calendarMode==='month'?'active':''} onClick={()=>setCalendarMode('month')}>Monat</button></div></div>
+    </div>
+    <div className="calendarNavigator">
+      <div className="navButtons"><button onClick={()=>move(-1)}>‹</button><button className="todayBtn" onClick={goToday}>Heute</button><button onClick={()=>move(1)}>›</button></div>
+      <div className="monthTitle">{title}</div>
+    </div>
+
+    {calendarMode==='month'&&<MonthCalendar events={events} customerMap={customerMap} calendarDate={calendarDate} onOpenCustomer={onOpenCustomer} onSelectDate={(d)=>{setCalendarDate(d);setCalendarMode('day')}} onNewEvent={onNewEvent}/>}
+    {calendarMode==='week'&&<WeekCalendar events={events} customerMap={customerMap} onOpenCustomer={onOpenCustomer} baseDate={calendarDate} onEditEvent={onEditEvent}/>}
+    {calendarMode==='day'&&<DayAgenda events={events} customerMap={customerMap} date={calendarDate} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus} onReschedule={onReschedule} onCompleteTestDrive={onCompleteTestDrive} onEditEvent={onEditEvent} onDeleteEvent={onDeleteEvent} onNewEvent={onNewEvent}/>}
   </div>;
 }
 
-function DayCalendar({events,customerMap,onOpenCustomer,onSetStatus,onReschedule,onCompleteTestDrive}){
-  return <div className="calendarSurface">
-    <div className="calendarHeader"><div><span>Heute</span><b>{new Date().toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</b></div><span className="countPill">{events.length} Termine</span></div>
-    <div className="dayTimeline">{events.length?events.map(e=><CalendarEvent key={e.id} e={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus} onReschedule={onReschedule} onCompleteTestDrive={onCompleteTestDrive}/>):<EmptyState title="Keine Termine heute" text="Für heute ist aktuell nichts im Kalender eingetragen."/>}</div>
+function startOfWeek(date){
+  const d=new Date(date); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); d.setHours(0,0,0,0); return d;
+}
+
+function MonthCalendar({events,customerMap,calendarDate,onOpenCustomer,onSelectDate,onNewEvent}){
+  const year=calendarDate.getFullYear(),month=calendarDate.getMonth();
+  const first=new Date(year,month,1);
+  const last=new Date(year,month+1,0);
+  const startOffset=(first.getDay()+6)%7;
+  const cells=[];
+  for(let i=0;i<startOffset;i++)cells.push(null);
+  for(let d=1;d<=last.getDate();d++)cells.push(new Date(year,month,d));
+  while(cells.length%7!==0)cells.push(null);
+  const weekdays=['Mo','Di','Mi','Do','Fr','Sa','So'];
+  return <div className="monthBoard">
+    <div className="monthWeekdays">{weekdays.map(w=><div key={w}>{w}</div>)}</div>
+    <div className="monthGrid">{cells.map((d,i)=>{
+      if(!d)return <div key={'e'+i} className="monthCell emptyCell"/>;
+      const es=events.filter(e=>new Date(e.starts_at).toDateString()===d.toDateString());
+      const isToday=d.toDateString()===new Date().toDateString();
+      return <div key={d.toISOString()} className={`monthCell ${isToday?'todayCell':''}`}>
+        <div className="monthDayHead"><button className="monthDayNumber" onClick={()=>onSelectDate(d)}>{d.getDate()}</button><button className="monthAdd" onClick={()=>onNewEvent(d)}>+</button></div>
+        <div className="monthEvents">{es.slice(0,3).map(e=>{const c=customerMap[e.customer_id];return <button key={e.id} className={`monthEvent ${e.status==='cancelled'?'cancelled':e.status==='completed'?'completed':''}`} onClick={()=>c&&onOpenCustomer(c)}><b>{fmtTime(e.starts_at)}</b><span>{e.status==='completed'?'✓ ':e.status==='cancelled'?'× ':''}{e.title}</span><small>{c?.name||e.vehicle||''}</small></button>})}{es.length>3&&<div className="moreEvents">+{es.length-3} weitere</div>}</div>
+      </div>
+    })}</div>
+  </div>;
+}
+
+function DayAgenda({events,customerMap,date,onOpenCustomer,onSetStatus,onReschedule,onCompleteTestDrive,onEditEvent,onDeleteEvent,onNewEvent}){
+  const es=events.filter(e=>new Date(e.starts_at).toDateString()===date.toDateString()).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
+  return <div className="dayAgendaSurface">
+    <div className="dayAgendaHead"><div><span>{date.toLocaleDateString('de-DE',{weekday:'long'})}</span><b>{date.toLocaleDateString('de-DE',{day:'2-digit',month:'long',year:'numeric'})}</b></div><button className="btn primary smallBtn" onClick={()=>onNewEvent(date)}>+ Termin an diesem Tag</button></div>
+    <div className="dayAgendaList">{es.length?es.map(e=><div className="dayAgendaWrap" key={e.id}><CalendarEvent e={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus} onReschedule={onReschedule} onCompleteTestDrive={onCompleteTestDrive}/><div className="eventManage"><button onClick={()=>onEditEvent(e)}>Bearbeiten</button>{e.event_type!=='test_drive'&&<button className="dangerText" onClick={()=>onDeleteEvent(e)}>Löschen</button>}</div></div>):<EmptyState title="Keine Termine" text="Für diesen Tag ist noch nichts eingetragen."/>}</div>
   </div>;
 }
 
@@ -790,10 +903,10 @@ function CalendarEvent({e,customer,onOpenCustomer,onSetStatus,onReschedule,onCom
 }
 
 function WeekCalendar({events,customerMap,onOpenCustomer,onSetStatus}){
-  const days=[0,1,2,3,4,5].map(offset=>{const d=new Date();const dow=d.getDay();const monday=new Date(d);monday.setDate(d.getDate()-((dow+6)%7)+offset);monday.setHours(0,0,0,0);return monday});
+  const days=[0,1,2,3,4,5,6].map(offset=>{const d=new Date(baseDate||new Date());const dow=d.getDay();const monday=new Date(d);monday.setDate(d.getDate()-((dow+6)%7)+offset);monday.setHours(0,0,0,0);return monday});
   return <div className="weekBoard">{days.map(d=>{
     const es=events.filter(e=>new Date(e.starts_at).toDateString()===d.toDateString());
-    return <div className="weekColumn" key={d.toISOString()}><div className="weekHead"><span>{d.toLocaleDateString('de-DE',{weekday:'short'})}</span><b>{d.getDate()}</b></div><div className="weekEvents">{es.map(e=>{const c=customerMap[e.customer_id];return <button key={e.id} className="weekEvent" onClick={()=>c&&onOpenCustomer(c)}><b>{fmtTime(e.starts_at)}</b><span>{e.status==='completed'?'✓ ':e.status==='cancelled'?'× ':''}{e.title}</span><small>{c?.name||e.vehicle||''}</small></button>})}{!es.length&&<div className="weekEmpty">frei</div>}</div></div>
+    return <div className="weekColumn" key={d.toISOString()}><div className="weekHead"><span>{d.toLocaleDateString('de-DE',{weekday:'short'})}</span><b>{d.getDate()}</b></div><div className="weekEvents">{es.map(e=>{const c=customerMap[e.customer_id];return <button key={e.id} className="weekEvent" onClick={()=>onEditEvent(e)}><b>{fmtTime(e.starts_at)}</b><span>{e.status==='completed'?'✓ ':e.status==='cancelled'?'× ':''}{e.title}</span><small>{c?.name||e.vehicle||''}</small></button>})}{!es.length&&<div className="weekEmpty">frei</div>}</div></div>
   })}</div>;
 }
 
