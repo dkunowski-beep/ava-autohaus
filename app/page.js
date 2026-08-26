@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.1.4</div>
+      <div className="versionPill">Alpha 1.1.5</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -882,7 +882,7 @@ function DayAgenda({events,customerMap,date,onOpenCustomer,onSetStatus,onResched
   const es=events.filter(e=>new Date(e.starts_at).toDateString()===date.toDateString()).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
   return <div className="dayAgendaSurface">
     <div className="dayAgendaHead"><div><span>{date.toLocaleDateString('de-DE',{weekday:'long'})}</span><b>{date.toLocaleDateString('de-DE',{day:'2-digit',month:'long',year:'numeric'})}</b></div><button className="btn primary smallBtn" onClick={()=>onNewEvent(date)}>+ Termin an diesem Tag</button></div>
-    <div className="dayAgendaList">{es.length?es.map(e=><div className="dayAgendaWrap" key={e.id}><CalendarEvent e={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus} onReschedule={onReschedule} onCompleteTestDrive={onCompleteTestDrive}/><div className="eventManage"><button onClick={()=>onEditEvent(e)}>Bearbeiten</button>{e.event_type!=='test_drive'&&<button className="dangerText" onClick={()=>onDeleteEvent(e)}>Löschen</button>}</div></div>):<EmptyState title="Keine Termine" text="Für diesen Tag ist noch nichts eingetragen."/>}</div>
+    <div className="dayAgendaList">{es.length?es.map(e=><div className="dayAgendaWrap" key={e.id}><CalendarEvent e={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus} onReschedule={onReschedule} onCompleteTestDrive={onCompleteTestDrive}/><div className="eventManage"><button onClick={()=>onEditEvent&&onEditEvent(e)}>Bearbeiten</button>{e.event_type!=='test_drive'&&<button className="dangerText" onClick={()=>onDeleteEvent(e)}>Löschen</button>}</div></div>):<EmptyState title="Keine Termine" text="Für diesen Tag ist noch nichts eingetragen."/>}</div>
   </div>;
 }
 
@@ -902,11 +902,11 @@ function CalendarEvent({e,customer,onOpenCustomer,onSetStatus,onReschedule,onCom
   </div>;
 }
 
-function WeekCalendar({events,customerMap,onOpenCustomer,onSetStatus}){
+function WeekCalendar({events,customerMap,onOpenCustomer,baseDate,onEditEvent}){
   const days=[0,1,2,3,4,5,6].map(offset=>{const d=new Date(baseDate||new Date());const dow=d.getDay();const monday=new Date(d);monday.setDate(d.getDate()-((dow+6)%7)+offset);monday.setHours(0,0,0,0);return monday});
   return <div className="weekBoard">{days.map(d=>{
     const es=events.filter(e=>new Date(e.starts_at).toDateString()===d.toDateString());
-    return <div className="weekColumn" key={d.toISOString()}><div className="weekHead"><span>{d.toLocaleDateString('de-DE',{weekday:'short'})}</span><b>{d.getDate()}</b></div><div className="weekEvents">{es.map(e=>{const c=customerMap[e.customer_id];return <button key={e.id} className="weekEvent" onClick={()=>onEditEvent(e)}><b>{fmtTime(e.starts_at)}</b><span>{e.status==='completed'?'✓ ':e.status==='cancelled'?'× ':''}{e.title}</span><small>{c?.name||e.vehicle||''}</small></button>})}{!es.length&&<div className="weekEmpty">frei</div>}</div></div>
+    return <div className="weekColumn" key={d.toISOString()}><div className="weekHead"><span>{d.toLocaleDateString('de-DE',{weekday:'short'})}</span><b>{d.getDate()}</b></div><div className="weekEvents">{es.map(e=>{const c=customerMap[e.customer_id];return <button key={e.id} className="weekEvent" onClick={()=>onEditEvent&&onEditEvent(e)}><b>{fmtTime(e.starts_at)}</b><span>{e.status==='completed'?'✓ ':e.status==='cancelled'?'× ':''}{e.title}</span><small>{c?.name||e.vehicle||''}</small></button>})}{!es.length&&<div className="weekEmpty">frei</div>}</div></div>
   })}</div>;
 }
 
