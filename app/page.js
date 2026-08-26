@@ -1074,24 +1074,18 @@ function Topbar({tab,onNew,onRefresh,onVoice,unread,onNotifications}){
 }
 
 function TodayView({avaFocus,salesRadar,onCoach,openTasks,todayEvents,customers,contractAlerts,customerMap,todos,teamMembers,uid,onCompleteAssigned,smartRecommendations,dayCloseSummary,onAddTodo,onToggleTodo,onDeleteTodo,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
-  return <div className="page">
-    <div className="heroRow">
-      <div><span className="eyebrow">Heute im Verkauf</span><h1>Mehr Zeit für den Verkauf.</h1><p>AVA erinnert, organisiert und hält dir den Rücken frei – damit du dich auf deine Kunden konzentrieren kannst.</p></div>
+
+  return <div className="page todayWorkspace">
+    <div className="heroRow todayHero">
+      <div><span className="eyebrow">Heute im Verkauf</span><h1>Dein Verkaufstag.</h1><p>AVA zeigt dir zuerst, was heute Umsatz bewegen kann – und hält den Rest bewusst im Hintergrund.</p></div>
       <div className="dateCard"><span>{new Date().toLocaleDateString('de-DE',{weekday:'long'})}</span><b>{new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'long'})}</b></div>
-    </div>
-    <div className="metricGrid">
-      <Metric n={openTasks.length} label="Offene Aufgaben" sub="heute & nächste Schritte"/>
-      <Metric n={todayEvents.length} label="Termine heute" sub="Kalender"/>
-      <Metric n={customers.length} label="Meine Kunden" sub="aktive Datensätze"/>
-      <Metric n={contractAlerts.length} label="Vertragschancen" sub="ca. 6 Monate vorher"/>
     </div>
 
     <section className="salesFocusSection">
       <div className="salesFocusHero">
-        <div><span className="eyebrow">AVA Sales Focus</span><h2>⚡ Das solltest du jetzt tun, um mehr zu verkaufen</h2><p>AVA kombiniert Abschlusschance, Dringlichkeit und 80/20-Potenzial. Pareto und Eisenhower arbeiten dabei im Hintergrund.</p></div>
-        <div className="focusScoreBadge"><small>OFFENE PUNKTE</small><b>{avaFocus?.total||0}</b></div>
+        <div><span className="eyebrow">AVA Sales Focus</span><h2>⚡ Das solltest du jetzt tun, um mehr zu verkaufen</h2><p>Abschlusschance, Dringlichkeit und 80/20-Potenzial – automatisch priorisiert.</p></div>
+        <div className="focusScoreBadge"><small>HEUTE IM FOKUS</small><b>{Math.min((salesRadar||[]).length,4)}</b></div>
       </div>
-
       <div className="nextBestActions">
         {(salesRadar||[]).slice(0,4).map((r,i)=>{
           const label=i===0?'JETZT':i===1?'DANACH':'HEUTE';
@@ -1108,62 +1102,59 @@ function TodayView({avaFocus,salesRadar,onCoach,openTasks,todayEvents,customers,
         })}
         {!(salesRadar||[]).length&&<EmptyState title="Keine priorisierten Verkaufschancen" text="Sobald offene Interessenten vorhanden sind, priorisiert AVA hier deinen Verkaufstag." compact/>}
       </div>
+    </section>
 
-      <div className="focusSupportGrid">
-        <div className="focusSupportCard danger"><div className="focusSupportHead"><span>🔴</span><div><b>Muss heute passieren</b><small>dringend + wichtig</small></div><strong>{avaFocus?.now?.length||0}</strong></div>
-          <div className="focusMiniList">{(avaFocus?.now||[]).slice(0,4).map(i=><button key={i.key} onClick={()=>i.customer&&onOpenCustomer(i.customer)}><b>{i.title}</b><span>{i.subtitle}</span></button>)}{!(avaFocus?.now||[]).length&&<span className="muted">Alles im grünen Bereich.</span>}</div>
-        </div>
-        <div className="focusSupportCard delegate"><div className="focusSupportHead"><span>👥</span><div><b>Kannst du abgeben</b><small>deine Zeit lieber in Verkauf investieren</small></div><strong>{avaFocus?.delegate?.length||0}</strong></div>
-          <div className="focusMiniList">{(avaFocus?.delegate||[]).slice(0,4).map(i=><div key={i.key}><b>{i.title}</b><span>{i.subtitle}</span></div>)}{!(avaFocus?.delegate||[]).length&&<span className="muted">Aktuell nichts zu delegieren.</span>}</div>
-        </div>
-        <div className="focusSupportCard later"><div className="focusSupportHead"><span>🕒</span><div><b>Nicht jetzt</b><small>bewusst aus deinem Fokus halten</small></div><strong>{(avaFocus?.plan?.length||0)+(avaFocus?.later?.length||0)}</strong></div>
-          <div className="focusMiniList">{[...(avaFocus?.plan||[]),...(avaFocus?.later||[])].slice(0,4).map(i=><button key={i.key} onClick={()=>i.customer&&onOpenCustomer(i.customer)}><b>{i.title}</b><span>{i.subtitle}</span></button>)}{!((avaFocus?.plan?.length||0)+(avaFocus?.later?.length||0))&&<span className="muted">Keine nachrangigen Punkte.</span>}</div>
-        </div>
+    <section className="mustTodaySection">
+      <div className="sectionTitle"><div><span className="eyebrow">Nicht vergessen</span><h2>🚨 Muss heute passieren</h2></div><span>{(avaFocus?.now||[]).length} wichtige Punkte</span></div>
+      <div className="mustTodayGrid">
+        {(avaFocus?.now||[]).length?(avaFocus.now.map(i=><button key={i.key} className="mustTodayCard" onClick={()=>i.customer&&onOpenCustomer(i.customer)}>
+          <div><b>{i.title}</b><span>{i.subtitle||'—'}</span></div>{i.due&&<strong>{fmtTime(i.due)}</strong>}
+        </button>)):<EmptyState title="Alles im grünen Bereich" text="Aktuell gibt es keinen dringenden wichtigen Punkt für heute." compact/>}
       </div>
     </section>
 
-    <section className="salesRadarSection">
-      <div className="sectionTitle"><div><span className="eyebrow">Sales Radar · Details</span><h2>🔥 Weitere Verkaufschancen im Blick</h2></div><span>automatisch priorisiert</span></div>
-      <div className="salesRadarGrid">
-        {salesRadar?.length?salesRadar.map((r,i)=><div className="salesRadarCard" key={r.customer.id}>
-          <div className="radarTop"><span>#{i+1}</span><b>{r.score}% <em>{r.score>=75?'🔥':r.score>=55?'🟠':'🟡'}</em></b></div>
-          <h3>{r.customer.name}</h3><p>{r.customer.vehicle_interest||'Fahrzeug noch offen'}</p>
-          <div className="radarReasons">{r.reasons.map(x=><span key={x}>{x}</span>)}</div>
-          <div className="radarAdvice"><small>AVA empfiehlt</small><b>{r.action}</b></div>
-          <div className="radarActions"><button className="btn soft" onClick={()=>onOpenCustomer(r.customer)}>Kundenakte</button><button className="btn coachBtn" onClick={()=>onCoach(r.customer)}>✨ Antwort & Strategie</button></div>
-        </div>):<EmptyState title="Noch keine Verkaufschancen" text="AVA zeigt hier automatisch die interessantesten offenen Vorgänge." compact/>}
+    <section className="todayScheduleSection">
+      <div className="sectionTitle"><div><span className="eyebrow">Tagesablauf</span><h2>📅 Deine Termine heute</h2></div><span>{todayEvents.length} Termin(e)</span></div>
+      <div className="todayTimeline">
+        {todayEvents.length?todayEvents.map(e=><AgendaItem key={e.id} event={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer}/>):<EmptyState title="Keine Termine" text="Für heute sind keine Kalendertermine gespeichert." compact/>}
       </div>
     </section>
 
     <section className="smartSection">
-      <div className="sectionTitle"><h2>AVA empfiehlt</h2><span>Deine wichtigsten nächsten Schritte</span></div>
+      <div className="sectionTitle"><div><span className="eyebrow">AVA Intelligence</span><h2>🧠 AVA empfiehlt</h2></div><span>Chancen, die sonst leicht liegen bleiben</span></div>
       <div className="smartGrid">
         {smartRecommendations.length?smartRecommendations.map(r=><button key={r.key} className={`smartCard ${r.tone||''}`} onClick={()=>r.customer&&onOpenCustomer(r.customer)}><span className="smartTag">{r.tag}</span><b>{r.title}</b><small>{r.body}</small><span className="smartArrow">›</span></button>):<EmptyState title="Alles sauber" text="AVA findet aktuell keinen Vorgang ohne nächsten Schritt." compact/>}
       </div>
     </section>
 
-    <section className="todoSection">
-      <div className="sectionTitle"><h2>Meine To-dos</h2><button className="btn soft smallBtn" onClick={onAddTodo}>+ Hinzufügen</button></div>
-      <TodoList todos={todos} members={teamMembers||[]} uid={uid} onToggle={onToggleTodo} onDelete={onDeleteTodo} onCompleteAssigned={onCompleteAssigned}/>
+    <section className="salesRadarSection compactRadar">
+      <div className="sectionTitle"><div><span className="eyebrow">Sales Radar</span><h2>🔥 Weitere Verkaufschancen</h2></div><span>nach deinem Top-Fokus</span></div>
+      <div className="salesRadarGrid">
+        {(salesRadar||[]).slice(1).length?salesRadar.slice(1).map((r,i)=><div className="salesRadarCard" key={r.customer.id}>
+          <div className="radarTop"><span>#{i+2}</span><b>{r.score}% <em>{r.score>=75?'🔥':r.score>=55?'🟠':'🟡'}</em></b></div>
+          <h3>{r.customer.name}</h3><p>{r.customer.vehicle_interest||'Fahrzeug noch offen'}</p>
+          <div className="radarReasons">{r.reasons.map(x=><span key={x}>{x}</span>)}</div>
+          <div className="radarAdvice"><small>AVA empfiehlt</small><b>{r.action}</b></div>
+          <div className="radarActions"><button className="btn soft" onClick={()=>onOpenCustomer(r.customer)}>Kundenakte</button><button className="btn coachBtn" onClick={()=>onCoach(r.customer)}>✨ Sales Coach</button></div>
+        </div>):<EmptyState title="Fokus ist klar" text="Aktuell gibt es keine weiteren priorisierten Verkaufschancen." compact/>}
+      </div>
     </section>
-    <div className="twoCol">
-      <section>
-        <SectionTitle title="Jetzt wichtig" hint="Priorisierte Aufgaben"/>
-        <div className="stack">
-          {openTasks.length?openTasks.slice(0,10).map(t=><TaskCard key={t.id} task={t} customer={customerMap[t.customer_id]} onReached={()=>onReached(t)} onNotReached={()=>onNotReached(t)} onDone={()=>onDone(t)} onOpenCustomer={onOpenCustomer}/>):<EmptyState title="Alles erledigt" text="Aktuell sind keine offenen Aufgaben vorhanden."/>}
+
+    <section className="todayWorkSection">
+      <div className="sectionTitle"><div><span className="eyebrow">Operativ</span><h2>Aufgaben & Team</h2></div><button className="btn soft smallBtn" onClick={onAddTodo}>+ To-do</button></div>
+      <div className="twoCol">
+        <div>
+          <SectionTitle title="Offene Aufgaben" hint="nach Priorität"/>
+          <div className="stack">{openTasks.length?openTasks.slice(0,8).map(t=><TaskCard key={t.id} task={t} customer={customerMap[t.customer_id]} onReached={()=>onReached(t)} onNotReached={()=>onNotReached(t)} onDone={()=>onDone(t)} onOpenCustomer={onOpenCustomer}/>):<EmptyState title="Alles erledigt" text="Aktuell sind keine offenen Aufgaben vorhanden."/>}</div>
         </div>
-      </section>
-      <aside className="rightRail">
-        <SectionTitle title="Termine heute" hint={`${todayEvents.length} Einträge`}/>
-        <div className="agenda">
-          {todayEvents.length?todayEvents.map(e=><AgendaItem key={e.id} event={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer}/>):<EmptyState title="Keine Termine" text="Für heute sind keine Kalendertermine gespeichert." compact/>}
-        </div>
-        {contractAlerts.length>0&&<>
-          <SectionTitle title="Vertragschancen" hint="ca. 6 Monate"/>
-          <div className="stack">{contractAlerts.map(c=><div className="opportunity" key={c.id}><div><span className="statusBadge green">Chance</span><b>{c.name}</b><small>{c.vehicle_interest||'Fahrzeug'} · Ende {fmtDate(c.contract_end_date)}</small></div><button className="btn soft smallBtn" onClick={()=>onQuick(c,'offer')}>Kontakt planen</button></div>)}</div>
-        </>}
-      </aside>
-    </div>
+        <aside className="rightRail">
+          <SectionTitle title="Meine To-dos" hint="heute"/>
+          <TodoList todos={todos} members={teamMembers||[]} uid={uid} onToggle={onToggleTodo} onDelete={onDeleteTodo} onCompleteAssigned={onCompleteAssigned}/>
+          {contractAlerts.length>0&&<><SectionTitle title="Vertragschancen" hint="ca. 6 Monate"/><div className="stack">{contractAlerts.map(c=><div className="opportunity" key={c.id}><div><span className="statusBadge green">Chance</span><b>{c.name}</b><small>{c.vehicle_interest||'Fahrzeug'} · Ende {fmtDate(c.contract_end_date)}</small></div><button className="btn soft smallBtn" onClick={()=>onQuick(c,'offer')}>Kontakt planen</button></div>)}</div></>}
+        </aside>
+      </div>
+    </section>
+
     <section className="dayClose">
       <div><span className="eyebrow">Tagesabschluss</span><h2>Alles für Feierabend im Blick.</h2><p>{dayCloseSummary.openToday} offene Aufgabe(n) heute · Morgen {dayCloseSummary.tomorrowEvents} Termin(e), davon {dayCloseSummary.tomorrowTestDrives} Probefahrt(en) und {dayCloseSummary.tomorrowDeliveries} Auslieferung(en).</p></div>
       <div className="dayCloseBadge">{dayCloseSummary.openToday===0?'✓ Alles erledigt':`${dayCloseSummary.openToday} offen`}</div>
