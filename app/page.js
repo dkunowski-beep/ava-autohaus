@@ -209,6 +209,33 @@ function Dashboard({session}){
     return recs.sort((a,b)=>b.score-a.score).slice(0,5);
   },[tasks,customers,events,contractAlerts,customerMap]);
 
+  const salesRadar=useMemo(()=>{
+    const now=Date.now();
+    const stageScore={lead:28,test_drive:62,offer:76,sold:100,delivery:100};
+    return customers.filter(c=>!['sold','delivery'].includes(c.stage)).map(c=>{
+      let score=stageScore[c.stage]||25;
+      const reasons=[];
+      const ce=events.filter(e=>e.customer_id===c.id&&e.status!=='cancelled');
+      const ct=tasks.filter(t=>t.customer_id===c.id&&t.status==='open');
+      const pastTest=ce.filter(e=>e.event_type==='test_drive'&&new Date(e.starts_at).getTime()<now).sort((a,b)=>new Date(b.starts_at)-new Date(a.starts_at))[0];
+      if(pastTest){score+=14;reasons.push('Probefahrt erfolgt')}
+      if(c.stage==='offer'){reasons.push('Angebot offen')}
+      if(c.waiting_on_customer){score-=7;reasons.push('wartet auf Kunde')}
+      if(ct.some(t=>new Date(t.due_at).getTime()<now)){score+=8;reasons.push('Nachkontakt fällig')}
+      if(!ct.length&&!ce.some(e=>new Date(e.starts_at).getTime()>now)){score+=5;reasons.push('kein nächster Schritt')}
+      if(c.contract_end_date){
+        const days=(new Date(c.contract_end_date).getTime()-now)/86400000;
+        if(days>0&&days<210){score+=10;reasons.push('Vertragsende nähert sich')}
+      }
+      score=Math.max(5,Math.min(95,score));
+      let action='Kontakt aufnehmen und Bedarf konkretisieren';
+      if(pastTest)action='Probefahrt nachfassen und Kaufentscheidung abholen';
+      if(c.stage==='offer')action='Angebot aktiv nachfassen und offenen Einwand klären';
+      if(c.waiting_on_customer)action='Kurzen, unverbindlichen Follow-up senden';
+      return {customer:c,score,reasons:reasons.slice(0,3),action};
+    }).sort((a,b)=>b.score-a.score).slice(0,3);
+  },[customers,events,tasks]);
+
   const dayCloseSummary=useMemo(()=>{
     const end=new Date();end.setHours(23,59,59,999);
     const tomorrowStart=new Date(end);tomorrowStart.setMilliseconds(1);
@@ -958,7 +985,7 @@ function Dashboard({session}){
     <main className="workspace">
       <Topbar tab={tab} onNew={fresh} onRefresh={load} onVoice={()=>{setVoiceOpen(true);setVoiceResult('')}} unread={notifications.filter(n=>!n.read_at).length} onNotifications={()=>setNotificationOpen(true)}/>
       {busy?<LoadingState/>:<>
-        {tab==='Heute'&&<TodayView openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} teamMembers={teamMembers} uid={uid} onCompleteAssigned={completeAssignedTodo} smartRecommendations={smartRecommendations} dayCloseSummary={dayCloseSummary} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
+        {tab==='Heute'&&<TodayView salesRadar={salesRadar} onCoach={c=>setCoachCustomer(c)} openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} teamMembers={teamMembers} uid={uid} onCompleteAssigned={completeAssignedTodo} smartRecommendations={smartRecommendations} dayCloseSummary={dayCloseSummary} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
         {tab==='Kunden'&&<CustomersView customers={filteredCustomers} search={search} setSearch={setSearch} onOpen={setDetail} onEdit={edit} onMail={openMail} onNew={fresh}/>}
         {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} calendarMode={calendarMode} setCalendarMode={setCalendarMode} calendarDate={calendarDate} setCalendarDate={setCalendarDate} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive} onNewEvent={(date)=>{setEditingEvent(null);if(date)setCalendarDate(date);setCalendarFormOpen(true)}} onEditEvent={(e)=>{setEditingEvent(e);setCalendarFormOpen(true)}} onDeleteEvent={deleteCalendarEvent}/>}        {tab==='Team'&&<TeamView uid={uid} members={teamMembers} messages={teamMessages} todos={todos} recipient={teamRecipient} setRecipient={setTeamRecipient} text={teamText} setText={setTeamText} asTask={teamAsTask} setAsTask={setTeamAsTask} onSend={sendTeamMessage} onRead={markTeamMessageRead} onDeleteMessage={hideTeamMessage} onCompleteTodo={completeAssignedTodo}/>}
       </>}
@@ -966,6 +993,7 @@ function Dashboard({session}){
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
     {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onHandover={c=>setHandoverCustomer(c)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
+    {coachCustomer&&<SalesCoachModal customer={coachCustomer} history={history.filter(h=>h.customer_id===coachCustomer.id)} events={events.filter(e=>e.customer_id===coachCustomer.id)} onClose={()=>setCoachCustomer(null)}/>} 
     {handoverCustomer&&<HandoverCustomerModal customer={handoverCustomer} uid={uid} members={teamMembers} onClose={()=>setHandoverCustomer(null)} onHandover={handoverCustomerTo}/>} 
     {notificationOpen&&<NotificationCenter notifications={notifications} prefs={notificationPrefs} onClose={()=>{setNotificationOpen(false);markNotificationsRead()}} onPermission={requestNotificationPermission} onPref={updateNotificationPref}/>} 
     {calendarFormOpen&&<CalendarEventForm customers={customers} event={editingEvent} defaultDate={calendarDate} onClose={()=>{setCalendarFormOpen(false);setEditingEvent(null)}} onSave={createManualEvent} onDelete={async()=>{if(!editingEvent)return;const ok=await deleteCalendarEvent(editingEvent);if(ok){setCalendarFormOpen(false);setEditingEvent(null)}}}/>}
@@ -989,7 +1017,7 @@ function Topbar({tab,onNew,onRefresh,onVoice,unread,onNotifications}){
   </header>;
 }
 
-function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,todos,teamMembers,uid,onCompleteAssigned,smartRecommendations,dayCloseSummary,onAddTodo,onToggleTodo,onDeleteTodo,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
+function TodayView({salesRadar,onCoach,openTasks,todayEvents,customers,contractAlerts,customerMap,todos,teamMembers,uid,onCompleteAssigned,smartRecommendations,dayCloseSummary,onAddTodo,onToggleTodo,onDeleteTodo,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
   return <div className="page">
     <div className="heroRow">
       <div><span className="eyebrow">Heute im Verkauf</span><h1>Mehr Zeit für den Verkauf.</h1><p>AVA erinnert, organisiert und hält dir den Rücken frei – damit du dich auf deine Kunden konzentrieren kannst.</p></div>
@@ -1001,6 +1029,19 @@ function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,t
       <Metric n={customers.length} label="Meine Kunden" sub="aktive Datensätze"/>
       <Metric n={contractAlerts.length} label="Vertragschancen" sub="ca. 6 Monate vorher"/>
     </div>
+
+    <section className="salesRadarSection">
+      <div className="sectionTitle"><div><span className="eyebrow">AVA Sales Radar</span><h2>🔥 Deine besten Verkaufschancen</h2></div><span>automatisch priorisiert</span></div>
+      <div className="salesRadarGrid">
+        {salesRadar?.length?salesRadar.map((r,i)=><div className="salesRadarCard" key={r.customer.id}>
+          <div className="radarTop"><span>#{i+1}</span><b>{r.score}% <em>{r.score>=75?'🔥':r.score>=55?'🟠':'🟡'}</em></b></div>
+          <h3>{r.customer.name}</h3><p>{r.customer.vehicle_interest||'Fahrzeug noch offen'}</p>
+          <div className="radarReasons">{r.reasons.map(x=><span key={x}>{x}</span>)}</div>
+          <div className="radarAdvice"><small>AVA empfiehlt</small><b>{r.action}</b></div>
+          <div className="radarActions"><button className="btn soft" onClick={()=>onOpenCustomer(r.customer)}>Kundenakte</button><button className="btn coachBtn" onClick={()=>onCoach(r.customer)}>✨ Antwort & Strategie</button></div>
+        </div>):<EmptyState title="Noch keine Verkaufschancen" text="AVA zeigt hier automatisch die interessantesten offenen Vorgänge." compact/>}
+      </div>
+    </section>
 
     <section className="smartSection">
       <div className="sectionTitle"><h2>AVA empfiehlt</h2><span>Deine wichtigsten nächsten Schritte</span></div>
@@ -1242,6 +1283,56 @@ function HistoryView({history,customerMap}){
     <div className="pageTitleRow"><div><span className="eyebrow">Nachvollziehbarkeit</span><h1>Historie</h1><p>Alle wichtigen Änderungen und Kundenaktionen chronologisch.</p></div></div>
     <div className="historyTimeline">{history.length?history.map(h=>{const c=customerMap[h.customer_id];return <div className="historyRow" key={h.id}><div className="historyDot"/><div className="historyCard"><div className="historyTop"><b>{h.action}</b><span>{fmtDateTime(h.created_at)}</span></div><p>{c?`${c.name} · KD ${c.customer_number}`:''}</p><small>{h.details}</small></div></div>}):<EmptyState title="Noch keine Historie" text="Sobald AVA Aktionen speichert, erscheinen sie hier."/>}</div>
   </div>;
+}
+
+function SalesCoachModal({customer,history=[],events=[],onClose}){
+  const [message,setMessage]=useState('');
+  const [mode,setMode]=useState('professionell');
+
+  function analyze(){
+    const q=message.toLowerCase();
+    if(!message.trim())return {signal:'Noch keine Kundennachricht eingefügt',strategy:'Füge die Nachricht des Kunden ein oder diktiere sinngemäß, was er gesagt hat.',reply:''};
+    let signal='Interesse vorhanden – offenen Punkt konkretisieren.';
+    let strategy='Nicht sofort mit Rabatt reagieren. Erst mit einer kurzen Rückfrage herausfinden, was die Entscheidung aktuell verhindert.';
+    let core=`Vielen Dank für Ihre Rückmeldung. Was ist für Ihre Entscheidung aktuell noch der wichtigste offene Punkt? Dann schaue ich gerne, wie wir dafür eine passende Lösung finden.`;
+    if(/zu teuer|preis|rate|monatlich|€|euro/.test(q)){
+      signal='💰 Preiseinwand – das Fahrzeug wird nicht grundsätzlich abgelehnt.';
+      strategy='Erst die tatsächliche Preis- oder Ratengrenze herausfinden. Danach gezielt Finanzierung, Laufzeit, Anzahlung oder Ausstattung besprechen – nicht vorschnell Rabatt geben.';
+      core=`Kann ich gut verstehen. Wenn ${customer.vehicle_interest||'das Fahrzeug'} für Sie grundsätzlich der Richtige ist, würde ich gerne schauen, ob wir die Konditionen noch passender gestalten können. Welche monatliche Rate bzw. welcher Rahmen wäre für Sie interessant?`;
+    } else if(/frau|mann|partner|partnerin|besprechen|überlegen|ueberlegen/.test(q)){
+      signal='🤝 Entscheidung ist noch nicht final – weitere Person oder Bedenkzeit spielt eine Rolle.';
+      strategy='Keinen Druck machen. Herausfinden, welche Information für die gemeinsame Entscheidung noch fehlt und einen konkreten nächsten Kontakt vereinbaren.';
+      core=`Natürlich, besprechen Sie das in Ruhe. Gibt es noch einen Punkt oder eine Information, die ich Ihnen für die Entscheidung mitgeben kann? Ich kann mich sonst gerne noch einmal zu einem passenden Zeitpunkt bei Ihnen melden.`;
+    } else if(/toyota|vw|volkswagen|bmw|mercedes|audi|hyundai|kia|skoda|vergleich|anderes auto|anderes fahrzeug/.test(q)){
+      signal='🚘 Wettbewerbsvergleich – der Kunde ist aktiv im Kaufprozess.';
+      strategy='Konkurrenz nicht schlechtreden. Fragen, welche zwei oder drei Kriterien entscheiden, und den eigenen Mehrwert genau daran ausrichten.';
+      core=`Das ist absolut nachvollziehbar – ein Vergleich gehört bei so einer Entscheidung dazu. Was sind für Sie am Ende die zwei wichtigsten Punkte: Ausstattung, Fahrgefühl, Rate, Platz oder etwas anderes? Dann kann ich Ihnen ganz konkret zeigen, wie ${customer.vehicle_interest||'unser Fahrzeug'} dazu passt.`;
+    } else if(/melde mich|ich melde|später|spaeter|noch nicht|keine zeit/.test(q)){
+      signal='⏳ Rückzugssignal – Interesse ist nicht zwingend weg, aber der Vorgang kann versanden.';
+      strategy='Nicht hinterherlaufen. Freundlich einen konkreten, kleinen nächsten Schritt anbieten und dem Kunden Kontrolle lassen.';
+      core=`Alles klar, kein Problem. Damit ich Sie nicht unnötig störe: Soll ich mich Ende der Woche noch einmal kurz melden, oder ist ein anderer Zeitpunkt für Sie besser?`;
+    } else if(/gekauft|entschieden|anderweitig|kein interesse|nicht mehr/.test(q)){
+      signal='⚠️ Möglicher Lost Sale.';
+      strategy='Nicht argumentieren. Kurz den Grund erfragen – das liefert wertvolle Information und kann in Einzelfällen die Tür offenhalten.';
+      core=`Danke für die offene Rückmeldung. Darf ich Sie noch kurz fragen, was am Ende ausschlaggebend für Ihre Entscheidung war? Das hilft mir sehr – und falls ich später noch einmal etwas Passendes für Sie habe, melde ich mich gerne nur auf Wunsch.`;
+    }
+    if(mode==='locker') core=`Hallo ${customer.name?.split(' ')[0]||''}, ${core.charAt(0).toLowerCase()+core.slice(1)}`;
+    if(mode==='abschluss') core=core+` Wenn das für Sie passt, können wir den nächsten Schritt auch direkt gemeinsam festmachen.`;
+    return {signal,strategy,reply:core};
+  }
+  const a=analyze();
+  const pastTest=events.some(e=>e.event_type==='test_drive'&&new Date(e.starts_at)<new Date());
+  return <div className="modalBackdrop coachBackdrop"><div className="customerModal salesCoachModal">
+    <div className="modalHead"><div><span className="eyebrow">AVA Sales Coach</span><h2>✨ Was soll ich dem Kunden antworten?</h2><p>{customer.name} · {customer.vehicle_interest||'Fahrzeuginteresse offen'}{pastTest?' · Probefahrt erfolgt':''}</p></div><button className="closeButton" onClick={onClose}>×</button></div>
+    <div className="coachInput"><label>Kundennachricht / Einwand</label><textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="z. B. „Der CX-5 gefällt mir, aber 429 € monatlich sind mir zu viel.“"/></div>
+    <div className="coachModes"><button className={mode==='locker'?'active':''} onClick={()=>setMode('locker')}>Locker</button><button className={mode==='professionell'?'active':''} onClick={()=>setMode('professionell')}>Professionell</button><button className={mode==='abschluss'?'active':''} onClick={()=>setMode('abschluss')}>Abschlussorientiert</button></div>
+    <div className="coachResult">
+      <div><small>🧠 AVA Einschätzung</small><b>{a.signal}</b></div>
+      <div><small>💡 Empfohlene Strategie</small><p>{a.strategy}</p></div>
+      {a.reply&&<div className="replySuggestion"><small>💬 Antwortvorschlag</small><p>{a.reply}</p><button className="btn primary" onClick={()=>navigator.clipboard?.writeText(a.reply)}>Antwort kopieren</button></div>}
+    </div>
+    <div className="coachContext"><span>Kundenkontext</span><b>{history.length} Aktivitäten in der Historie</b><b>{pastTest?'Probefahrt bereits erfolgt':'Keine absolvierte Probefahrt erkannt'}</b></div>
+  </div></div>;
 }
 
 function HandoverCustomerModal({customer,uid,members,onClose,onHandover}){
