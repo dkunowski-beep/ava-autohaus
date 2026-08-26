@@ -61,7 +61,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.4.3.5.4.3.2</div>
+      <div className="versionPill">Alpha 1.4.4.5.4.3.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -771,20 +771,36 @@ function Dashboard({session}){
     const q=normalized.toLowerCase();
     const c=findCustomerInSpeech(normalized);
 
-    if(q.startsWith('termin ')||q.includes('termin morgen')||q.includes('termin mit ')||q.includes('teammeeting')){
+    const calendarIntent =
+      q.includes('termin') ||
+      q.includes('meeting') ||
+      q.includes('besprechung') ||
+      q.includes('kalender') ||
+      q.includes('eintragen') ||
+      q.includes('trage ') ||
+      q.includes('trag ');
+    if(calendarIntent){
       const when=parseSpeechDate(text);
       if(!when){setVoiceResult('Datum/Uhrzeit konnte ich nicht eindeutig erkennen. Beispiel: „Termin morgen um 10 Uhr: Teammeeting.“');return}
       const vc=findCustomerInSpeech(text);
-      let title=text
+      let title=normalized
         .replace(/^ava[,:\s-]*/i,'')
-        .replace(/^termin\s*/i,'')
+        .replace(/^(?:erstelle|erstellen|mach|mache|lege|leg|plane|plan|trage|trag)\s+(?:mir\s+)?(?:bitte\s+)?/i,'')
+        .replace(/^(?:einen?|eine)?\s*termin\s*/i,'')
+        .replace(/\b(?:für|fuer)\s+(?:heute|morgen|übermorgen|uebermorgen|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b/ig,'')
         .replace(/\b(?:heute|morgen|übermorgen|uebermorgen|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b/ig,'')
-        .replace(/\bum\s+\d{1,2}(?:(?::|\.)\d{2})?\s*uhr\b/ig,'')
-        .replace(/\bmit\s+.+$/i, vc?'':'$&')
+        .replace(/\b(?:um\s*)?\d{1,2}(?:(?::|\.)\d{2})?\s*uhr\b/ig,'')
+        .replace(/\b(?:um\s*)?\d{1,2}:\d{2}\b/ig,'')
+        .replace(/^\s*(?:für|fuer)\s*/i,'')
         .replace(/^[:\s,-]+|[:\s,-]+$/g,'')
         .trim();
-      if(vc) title=title.replace(new RegExp(`\\bmit\\s+${vc.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`,'i'),'').trim();
-      if(!title||title.toLowerCase()==='termin')title=vc?`Termin mit ${vc.name}`:'Persönlicher Termin';
+      if(vc){
+        const escaped=vc.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        title=title.replace(new RegExp(`\\bmit\\s+(?:herrn?|frau)?\\s*${escaped}\\b`,'i'),'').trim();
+        title=title.replace(new RegExp(`\\b(?:herrn?|frau)?\\s*${escaped}\\b`,'i'),'').trim();
+      }
+      title=title.replace(/^[:\s,-]+|[:\s,-]+$/g,'').trim();
+      if(!title||title.toLowerCase()==='termin'||title.toLowerCase()==='einen termin')title=vc?`Termin mit ${vc.name}`:'Persönlicher Termin';
       const ends=new Date(when.getTime()+60*60000);
       const {data:clashes,error:clashError}=await supabase.from('ava_events')
         .select('id,title,starts_at,ends_at')
@@ -912,7 +928,7 @@ function Dashboard({session}){
       return;
     }
 
-    setVoiceResult('Diesen Befehl versteht AVA 0.8 noch nicht. Unterstützt werden aktuell: Probefahrt planen, Kunde nicht erreicht, Sprachnotiz und Kundenakte öffnen.');
+    setVoiceResult('Diesen Sprachbefehl konnte AVA noch nicht eindeutig zuordnen. Versuche z. B. „Erstelle einen Termin für morgen um 15 Uhr mit Herrn Mustermann“ oder „Neuen Interessenten Max Mustermann anlegen“.');
   }
 
   useEffect(()=>{

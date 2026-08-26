@@ -1,16 +1,13 @@
-# AVA 1.4.3 — Team Chats
+# AVA 1.4.4 — Natural Voice Calendar Fix
 
-New Team Chat experience:
-- One conversation per colleague instead of a long list of separate message cards.
-- Direct reply box inside each conversation.
-- “Antworten” action focuses the existing conversation reply box.
-- Each user can delete a message only from their own view.
-- Deleting a message does NOT remove it from the other colleague's account.
-- Unread counters per conversation.
-- Assigned tasks stay separated below the chat.
+Voice calendar intent is now much more natural.
 
-Supabase:
-- Added `deleted_by_sender_at` and `deleted_by_recipient_at`.
-- Added secure RPC `ava_hide_team_message`.
+Examples now accepted:
+- “Erstelle einen Termin für morgen 15:00 Uhr mit Herrn Mustermann”
+- “Mach mir morgen um 15 Uhr einen Termin”
+- “Plane morgen 15 Uhr eine Besprechung”
+- “Trag morgen um 15 Uhr einen Termin ein”
+- “Termin morgen um 15 Uhr”
 
-All AVA 1.4.2 calendar delete fixes and current push infrastructure remain included.
+The calendar command now recognizes broader wording, cleans the title more reliably and saves the appointment to the signed-in user's calendar.
+All AVA 1.4.3 Team Chat, calendar delete and working push functionality remain included.
