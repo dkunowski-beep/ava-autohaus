@@ -126,6 +126,7 @@ function Dashboard({session}){
   const emptyForm={name:'',customer_number:'',phone:'',email:'',vehicle_interest:'',purchased_vehicle:'',stage:'lead',notes:'',contract_end_date:'',ordered_at:'',delivered_at:'',test_drive_at:'',planned_delivery_at:''};
   const [form,setForm]=useState(emptyForm);
   const [handoverCustomer,setHandoverCustomer]=useState(null);
+  const [coachCustomer,setCoachCustomer]=useState(null);
 
   async function load(){
     setBusy(true);
@@ -215,8 +216,8 @@ function Dashboard({session}){
     return customers.filter(c=>!['sold','delivery'].includes(c.stage)).map(c=>{
       let score=stageScore[c.stage]||25;
       const reasons=[];
-      const ce=events.filter(e=>e.customer_id===c.id&&e.status!=='cancelled');
-      const ct=tasks.filter(t=>t.customer_id===c.id&&t.status==='open');
+      const ce=(events||[]).filter(e=>e.customer_id===c.id&&e.status!=='cancelled');
+      const ct=(tasks||[]).filter(t=>t.customer_id===c.id&&t.status==='open');
       const pastTest=ce.filter(e=>e.event_type==='test_drive'&&new Date(e.starts_at).getTime()<now).sort((a,b)=>new Date(b.starts_at)-new Date(a.starts_at))[0];
       if(pastTest){score+=14;reasons.push('Probefahrt erfolgt')}
       if(c.stage==='offer'){reasons.push('Angebot offen')}
@@ -1329,7 +1330,7 @@ function SalesCoachModal({customer,history=[],events=[],onClose}){
     <div className="coachResult">
       <div><small>🧠 AVA Einschätzung</small><b>{a.signal}</b></div>
       <div><small>💡 Empfohlene Strategie</small><p>{a.strategy}</p></div>
-      {a.reply&&<div className="replySuggestion"><small>💬 Antwortvorschlag</small><p>{a.reply}</p><button className="btn primary" onClick={()=>navigator.clipboard?.writeText(a.reply)}>Antwort kopieren</button></div>}
+      {a.reply&&<div className="replySuggestion"><small>💬 Antwortvorschlag</small><p>{a.reply}</p><button className="btn primary" onClick={()=>{if(navigator?.clipboard?.writeText)navigator.clipboard.writeText(a.reply)}}>Antwort kopieren</button></div>}
     </div>
     <div className="coachContext"><span>Kundenkontext</span><b>{history.length} Aktivitäten in der Historie</b><b>{pastTest?'Probefahrt bereits erfolgt':'Keine absolvierte Probefahrt erkannt'}</b></div>
   </div></div>;
