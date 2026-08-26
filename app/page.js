@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.3.1</div>
+      <div className="versionPill">Alpha 1.3.2.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -825,9 +825,9 @@ function Dashboard({session}){
     <main className="workspace">
       <Topbar tab={tab} onNew={fresh} onVoice={()=>{setVoiceOpen(true);setVoiceResult('')}} unread={notifications.filter(n=>!n.read_at).length} onNotifications={()=>setNotificationOpen(true)}/>
       {busy?<LoadingState/>:<>
-        {tab==='Heute'&&<TodayView openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} smartRecommendations={smartRecommendations} dayCloseSummary={dayCloseSummary} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
+        {tab==='Heute'&&<TodayView openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} teamMembers={teamMembers} uid={uid} onCompleteAssigned={completeAssignedTodo} smartRecommendations={smartRecommendations} dayCloseSummary={dayCloseSummary} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
         {tab==='Kunden'&&<CustomersView customers={filteredCustomers} search={search} setSearch={setSearch} onOpen={setDetail} onEdit={edit} onMail={openMail} onNew={fresh}/>}
-        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} calendarMode={calendarMode} setCalendarMode={setCalendarMode} calendarDate={calendarDate} setCalendarDate={setCalendarDate} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive} onNewEvent={(date)=>{setEditingEvent(null);if(date)setCalendarDate(date);setCalendarFormOpen(true)}} onEditEvent={(e)=>{setEditingEvent(e);setCalendarFormOpen(true)}} onDeleteEvent={deleteCalendarEvent}/>}        {tab==='Team'&&<TeamView email={session.user.email}/>}
+        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} calendarMode={calendarMode} setCalendarMode={setCalendarMode} calendarDate={calendarDate} setCalendarDate={setCalendarDate} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive} onNewEvent={(date)=>{setEditingEvent(null);if(date)setCalendarDate(date);setCalendarFormOpen(true)}} onEditEvent={(e)=>{setEditingEvent(e);setCalendarFormOpen(true)}} onDeleteEvent={deleteCalendarEvent}/>}        {tab==='Team'&&<TeamView uid={uid} members={teamMembers} messages={teamMessages} todos={todos} recipient={teamRecipient} setRecipient={setTeamRecipient} text={teamText} setText={setTeamText} asTask={teamAsTask} setAsTask={setTeamAsTask} onSend={sendTeamMessage} onRead={markTeamMessageRead} onCompleteTodo={completeAssignedTodo}/>}
       </>}
     </main>
     <MobileNav tab={tab} setTab={setTab}/>
@@ -855,7 +855,7 @@ function Topbar({tab,onNew,onVoice,unread,onNotifications}){
   </header>;
 }
 
-function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,todos,smartRecommendations,dayCloseSummary,onAddTodo,onToggleTodo,onDeleteTodo,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
+function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,todos,teamMembers,uid,onCompleteAssigned,smartRecommendations,dayCloseSummary,onAddTodo,onToggleTodo,onDeleteTodo,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
   return <div className="page">
     <div className="heroRow">
       <div><span className="eyebrow">Heute im Verkauf</span><h1>Mehr Zeit für den Verkauf.</h1><p>AVA erinnert, organisiert und hält dir den Rücken frei – damit du dich auf deine Kunden konzentrieren kannst.</p></div>
@@ -877,7 +877,7 @@ function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,t
 
     <section className="todoSection">
       <div className="sectionTitle"><h2>Meine To-dos</h2><button className="btn soft smallBtn" onClick={onAddTodo}>+ Hinzufügen</button></div>
-      <TodoList todos={todos} members={teamMembers} uid={uid} onToggle={onToggleTodo} onDelete={onDeleteTodo} onCompleteAssigned={completeAssignedTodo}/>
+      <TodoList todos={todos} members={teamMembers||[]} uid={uid} onToggle={onToggleTodo} onDelete={onDeleteTodo} onCompleteAssigned={onCompleteAssigned}/>
     </section>
     <div className="twoCol">
       <section>
@@ -904,7 +904,7 @@ function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,t
   </div>;
 }
 
-function TodoList({todos,members=[],uid,onToggle,onDelete,onCompleteAssigned}){
+function TodoList({todos=[],members=[],uid,onToggle,onDelete,onCompleteAssigned}){
   const today=new Date();today.setHours(0,0,0,0);
   const visible=todos.filter(t=>{
     if(t.status==='done') return false;
@@ -914,7 +914,7 @@ function TodoList({todos,members=[],uid,onToggle,onDelete,onCompleteAssigned}){
   });
   return <div className="todoList">
     {visible.length?visible.map(t=><div className="todoItem" key={t.id}>
-      <button className="todoCheck" onClick={()=>t.assigned_by&&t.user_id===uid?onCompleteAssigned(t):onToggle(t)}>○</button>
+      <button className="todoCheck" onClick={()=>t.assigned_by&&t.user_id===uid&&onCompleteAssigned?onCompleteAssigned(t):onToggle(t)}>○</button>
       <div className="todoMain"><b>{t.title}</b><span>{t.assigned_by?`Von ${members.find(m=>m.user_id===t.assigned_by)?.display_name||'Kollege'} · `:''}{t.due_date?fmtDate(t.due_date):'Heute'}</span></div>
       <button className="todoDelete" onClick={()=>onDelete(t)}>×</button>
     </div>):<div className="todoEmpty">Keine persönlichen To-dos für heute.</div>}
@@ -1230,7 +1230,7 @@ function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
   </div>;
 }
 
-function TeamView({uid,members,messages,todos,recipient,setRecipient,text,setText,asTask,setAsTask,onSend,onRead,onCompleteTodo}){
+function TeamView({uid,members=[],messages=[],todos=[],recipient,setRecipient,text,setText,asTask,setAsTask,onSend,onRead,onCompleteTodo}){
   const me=members.find(m=>m.user_id===uid);
   const others=members.filter(m=>m.user_id!==uid);
   const member=id=>members.find(m=>m.user_id===id);

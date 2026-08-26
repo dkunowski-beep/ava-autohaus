@@ -1,13 +1,11 @@
-# AVA 1.3.1 — Team Assistant Build Fix
+# AVA 1.3.2 — Team Assistant Runtime Fix
 
-Fixes the Vercel compile error:
-`the name TeamView is defined multiple times`
+Fixes the client-side exception after refreshing AVA 1.3.1.
 
-The previous AVA code already contained a TeamView component. AVA 1.3 added the new Team Assistant view under the same function name, causing the Next.js build to fail.
+Fixed:
+- TodayView now correctly receives team members and the current user ID.
+- The Team navigation now uses the new Team Assistant component signature.
+- Defensive defaults keep AVA stable before the Team Supabase migration is applied.
 
-1.3.1 removes the obsolete duplicate and keeps the new Team Assistant implementation.
-
-The Supabase Team Assistant migration is still included under:
-`supabase/ava_1_3_team_assistant.sql`
-
-Apply that migration only after this version deploys successfully.
+Next step after successful deployment:
+Apply `supabase/ava_1_3_team_assistant.sql` in Supabase.
