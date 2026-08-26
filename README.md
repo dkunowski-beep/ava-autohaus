@@ -1,19 +1,13 @@
-# AVA 1.3 — Team Assistant
+# AVA 1.3.1 — Team Assistant Build Fix
 
-New:
-- Team area with internal messages
-- Send a normal message to a colleague
-- Convert a message directly into an assigned To-do
-- Recipient sees assigned tasks under “Meine To-dos”
-- Sender and recipient are visible
-- Recipient gets an AVA notification: “Neue Nachricht/Aufgabe von …”
-- Sender gets an AVA notification when an assigned task is completed
-- Read/unread team messages
-- Dedicated “Mir zugewiesen” overview
-- Dark futuristic AVA design retained
+Fixes the Vercel compile error:
+`the name TeamView is defined multiple times`
 
-Database:
-`supabase/ava_1_3_team_assistant.sql` contains the required migration.
-The connected Supabase project denied migration permission during this build, so this SQL still needs to be applied to the project before Team messaging can work.
+The previous AVA code already contained a TeamView component. AVA 1.3 added the new Team Assistant view under the same function name, causing the Next.js build to fail.
 
-All AVA 1.2 Smart Assistant + Calendar Pro functionality remains included.
+1.3.1 removes the obsolete duplicate and keeps the new Team Assistant implementation.
+
+The Supabase Team Assistant migration is still included under:
+`supabase/ava_1_3_team_assistant.sql`
+
+Apply that migration only after this version deploys successfully.

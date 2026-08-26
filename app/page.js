@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.3</div>
+      <div className="versionPill">Alpha 1.3.1</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -1107,13 +1107,6 @@ function HistoryView({history,customerMap}){
   return <div className="page">
     <div className="pageTitleRow"><div><span className="eyebrow">Nachvollziehbarkeit</span><h1>Historie</h1><p>Alle wichtigen Änderungen und Kundenaktionen chronologisch.</p></div></div>
     <div className="historyTimeline">{history.length?history.map(h=>{const c=customerMap[h.customer_id];return <div className="historyRow" key={h.id}><div className="historyDot"/><div className="historyCard"><div className="historyTop"><b>{h.action}</b><span>{fmtDateTime(h.created_at)}</span></div><p>{c?`${c.name} · KD ${c.customer_number}`:''}</p><small>{h.details}</small></div></div>}):<EmptyState title="Noch keine Historie" text="Sobald AVA Aktionen speichert, erscheinen sie hier."/>}</div>
-  </div>;
-}
-
-function TeamView({email}){
-  return <div className="page">
-    <div className="pageTitleRow"><div><span className="eyebrow">Zusammenarbeit</span><h1>Team</h1><p>Vertretungen und interne Aufgaben werden als nächstes erweitert.</p></div></div>
-    <div className="teamGrid"><div className="teamCard"><div className="avatar large">V</div><div><b>Dein Verkäuferkonto</b><span>{email}</span><small>Aktiv · Verkäufer</small></div></div><div className="teamCard mutedCard"><div className="teamIcon">↔</div><div><b>Vertretung</b><span>Urlaub, Ausgleichstag oder freier Samstag</span><small>Kommt in einer der nächsten Versionen.</small></div></div></div>
   </div>;
 }
 
