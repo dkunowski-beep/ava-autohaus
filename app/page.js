@@ -61,7 +61,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.4.4.5.4.3.2</div>
+      <div className="versionPill">Alpha 1.4.5.5.4.3.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -125,6 +125,7 @@ function Dashboard({session}){
   const recognitionRef=useRef(null);
   const emptyForm={name:'',customer_number:'',phone:'',email:'',vehicle_interest:'',purchased_vehicle:'',stage:'lead',notes:'',contract_end_date:'',ordered_at:'',delivered_at:'',test_drive_at:'',planned_delivery_at:''};
   const [form,setForm]=useState(emptyForm);
+  const [handoverCustomer,setHandoverCustomer]=useState(null);
 
   async function load(){
     setBusy(true);
@@ -380,6 +381,19 @@ function Dashboard({session}){
     if(!window.confirm('To-do löschen?'))return;
     const {error}=await supabase.from('ava_todos').delete().eq('id',todo.id);
     if(error)alert(error.message);else await load();
+  }
+
+  async function handoverCustomerTo(customer,recipientId){
+    if(!customer?.id||!recipientId)return false;
+    const colleague=teamMembers.find(m=>m.user_id===recipientId);
+    if(!colleague){alert('Kollege nicht gefunden.');return false}
+    const {error}=await supabase.rpc('ava_handover_customer',{p_customer_id:customer.id,p_recipient_id:recipientId});
+    if(error){alert('Kunde konnte nicht übergeben werden: '+error.message);return false}
+    alert(`${customer.name} wurde an ${colleague.display_name} übergeben.`);
+    setHandoverCustomer(null);
+    setDetail(null);
+    await load();
+    return true;
   }
 
   async function deleteCustomer(customer){
@@ -951,7 +965,8 @@ function Dashboard({session}){
     </main>
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
-    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
+    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onHandover={c=>setHandoverCustomer(c)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
+    {handoverCustomer&&<HandoverCustomerModal customer={handoverCustomer} uid={uid} members={teamMembers} onClose={()=>setHandoverCustomer(null)} onHandover={handoverCustomerTo}/>} 
     {notificationOpen&&<NotificationCenter notifications={notifications} prefs={notificationPrefs} onClose={()=>{setNotificationOpen(false);markNotificationsRead()}} onPermission={requestNotificationPermission} onPref={updateNotificationPref}/>} 
     {calendarFormOpen&&<CalendarEventForm customers={customers} event={editingEvent} defaultDate={calendarDate} onClose={()=>{setCalendarFormOpen(false);setEditingEvent(null)}} onSave={createManualEvent} onDelete={async()=>{if(!editingEvent)return;const ok=await deleteCalendarEvent(editingEvent);if(ok){setCalendarFormOpen(false);setEditingEvent(null)}}}/>}
     {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} running={voiceRunning} onListen={startVoice} onRun={async()=>{if(voiceRunning)return;setVoiceRunning(true);setVoiceResult('AVA übernimmt den Befehl…');try{await runVoiceCommand()}catch(e){setVoiceResult('Fehler beim Übernehmen: '+(e?.message||e))}finally{setVoiceRunning(false)}}} onClose={()=>{stopVoice();setVoiceOpen(false)}}/>}
@@ -1229,12 +1244,34 @@ function HistoryView({history,customerMap}){
   </div>;
 }
 
-function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,onMail,onQuick,onUpload,onOpenDocument,onPurchase,onDeliveryStart,onDeliveryComplete,onWait,onDelete}){
+function HandoverCustomerModal({customer,uid,members,onClose,onHandover}){
+  const colleagues=members.filter(m=>m.user_id!==uid&&m.active!==false);
+  const [recipient,setRecipient]=useState('');
+  const [sending,setSending]=useState(false);
+  const colleague=colleagues.find(m=>m.user_id===recipient);
+  async function submit(e){
+    e.preventDefault();
+    if(!recipient||!colleague)return;
+    if(!window.confirm(`${customer.name} wirklich an ${colleague.display_name} übergeben?\n\nDanach ist ${colleague.display_name} für diese Kundenakte zuständig.`))return;
+    setSending(true);
+    try{await onHandover(customer,recipient)}finally{setSending(false)}
+  }
+  return <div className="modalBackdrop"><form className="customerModal compactModal" onSubmit={submit}>
+    <div className="modalHead"><div><span className="eyebrow">Team · Kundenübergabe</span><h2>{customer.customer_number?'Kunde':'Interessent'} übergeben</h2><p><b>{customer.name}</b> wird vollständig an einen Kollegen übertragen.</p></div><button type="button" className="closeButton" onClick={onClose}>×</button></div>
+    <div className="formSection">
+      <Field label="An welchen Kollegen?" full><select required value={recipient} onChange={e=>setRecipient(e.target.value)}><option value="">Kollegen auswählen…</option>{colleagues.map(m=><option key={m.user_id} value={m.user_id}>{m.display_name} · {m.role||'Team'}</option>)}</select></Field>
+      <div className="handoverInfo"><b>Nach der Übergabe</b><span>Der Kollege übernimmt die Kundenakte. Sie verschwindet aus deiner eigenen Kundenliste. Der Vorgang wird in der Kundenhistorie dokumentiert und der Kollege erhält eine Benachrichtigung.</span></div>
+    </div>
+    <div className="modalFoot"><span>Keine Kopie – echte Zuständigkeitsübergabe.</span><div><button type="button" className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary" disabled={!recipient||sending}>{sending?'Wird übergeben…':'↗ Kunde übergeben'}</button></div></div>
+  </form></div>;
+}
+
+function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,onMail,onHandover,onQuick,onUpload,onOpenDocument,onPurchase,onDeliveryStart,onDeliveryComplete,onWait,onDelete}){
   const stage=STAGES[customer.stage]||STAGES.lead;
   return <div className="drawerBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
     <aside className="drawer">
       <div className="drawerHead"><div><span className={`statusBadge ${stage.tone}`}>{stage.label}</span><h2>{customer.name}</h2><p>{customer.customer_number?`Kundennummer ${customer.customer_number}`:'Interessent · Kundennummer folgt beim Kauf'}</p></div><button className="closeButton" onClick={onClose}>×</button></div>
-      <div className="drawerActions"><button className="btn primary" onClick={onEdit}>Bearbeiten</button><button className="btn soft" onClick={onMail}>E-Mail erstellen</button><button className="btn ghost" onClick={()=>onWait(customer)}>{customer.waiting_on_customer?'Warten beenden':'Wartet auf Kunde'}</button></div>
+      <div className="drawerActions"><button className="btn primary" onClick={onEdit}>Bearbeiten</button><button className="btn soft" onClick={onMail}>E-Mail erstellen</button><button className="btn soft" onClick={()=>onHandover(customer)}>↗ An Kollegen übergeben</button><button className="btn ghost" onClick={()=>onWait(customer)}>{customer.waiting_on_customer?'Warten beenden':'Wartet auf Kunde'}</button></div>
       <DetailSection title="Kontakt"><DetailRow label="Telefon" value={customer.phone}/><DetailRow label="E-Mail" value={customer.email}/></DetailSection>
       <DetailSection title="Fahrzeug"><DetailRow label="Fahrzeuginteresse" value={customer.vehicle_interest}/><DetailRow label="Gekauftes Fahrzeug" value={customer.purchased_vehicle}/><DetailRow label="Notizen" value={customer.notes}/></DetailSection>
       <DetailSection title="Termine & Vertrag">

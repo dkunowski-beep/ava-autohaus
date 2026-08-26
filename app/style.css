@@ -261,3 +261,7 @@ input::placeholder,textarea::placeholder{color:#52657b!important}
 .teamReplyBox{border-top:1px solid #14304b;padding:12px;background:#071421}.teamReplyInput{width:100%;min-height:72px;max-height:150px;resize:vertical}.teamReplyActions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px}.teamTaskSwitch.compact{margin:0;flex:1;max-width:310px}
 @media(max-width:850px){.teamChatShell{grid-template-columns:230px minmax(0,1fr)}}
 @media(max-width:760px){.teamChatShell{grid-template-columns:1fr;min-height:0}.conversationList{max-height:210px;overflow:auto}.threadPanel{min-height:520px}.messageBubble{max-width:88%}.teamReplyActions{align-items:stretch;flex-direction:column}.teamTaskSwitch.compact{max-width:none;width:100%}.teamReplyActions .btn{width:100%}}
+
+/* AVA 1.4.5 – Kundenübergabe */
+.handoverInfo{margin-top:14px;padding:13px;border:1px solid #17466e;background:#081b2c;border-radius:13px;display:flex;flex-direction:column;gap:5px}
+.handoverInfo b{font-size:10px}.handoverInfo span{font-size:9px;line-height:1.5;color:#86a0b9}
