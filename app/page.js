@@ -1533,6 +1533,19 @@ function CustomerForm({selected,form,setForm,onClose,onSubmit}){
         <Field label="Telefon"><input value={form.phone} onChange={e=>set('phone',e.target.value)}/></Field>
         <Field label="E-Mail"><input type="email" value={form.email} onChange={e=>set('email',e.target.value)}/></Field>
         <Field label="Fahrzeuginteresse" full><input value={form.vehicle_interest} onChange={e=>set('vehicle_interest',e.target.value)}/></Field>
+        <Field label="Kontaktquelle" hint="Wie ist der Kunde auf uns zugekommen?" full><select value={form.contact_source||''} onChange={e=>set('contact_source',e.target.value)}>
+          <option value="">Bitte auswählen…</option>
+          <option value="showroom">Showroom-Besuch</option>
+          <option value="online">Online-Anfrage</option>
+          <option value="phone">Telefonanruf</option>
+          <option value="referral">Empfehlung</option>
+          <option value="email">E-Mail</option>
+          <option value="manufacturer">Hersteller-Lead</option>
+          <option value="existing">Bestandskunde</option>
+          <option value="event">Veranstaltung / Event</option>
+          <option value="social">Social Media</option>
+          <option value="other">Sonstiges</option>
+        </select></Field>
         <Field label="Gekauftes Fahrzeug" hint="Erst relevant, sobald der Interessent kauft." full><input value={form.purchased_vehicle||''} onChange={e=>set('purchased_vehicle',e.target.value)}/></Field>
         <Field label="Kundenstatus" hint="Der Status steuert AVAs Automatik." full><select value={form.stage} onChange={e=>set('stage',e.target.value)}>{Object.entries(STAGES).map(([k,v])=><option value={k} key={k}>{v.label}</option>)}</select></Field>
       </div></div>

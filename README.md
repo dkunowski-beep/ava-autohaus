@@ -1,8 +1,9 @@
-# AVA 1.4.11 – Kundenakten-Fix
+# AVA 1.4.12 – Kontaktquelle bearbeiten
 
-Behebt den Client-Side-Fehler beim Öffnen einer Kundenakte nach 1.4.10.
-Die neue Kontaktquellen-Anzeige hatte in 1.4.10 eine fehlende Hilfsfunktion.
+Fix:
+- In der Kundenakte unter Bearbeiten ist die Kontaktquelle jetzt sichtbar und änderbar.
+- Bestehende Kontaktquelle wird beim Öffnen übernommen.
+- Auswahl entspricht der Kontaktquelle beim Anlegen.
+- Kein neues SQL nötig, wenn die 1.4.10-Migration bereits ausgeführt wurde.
 
-Wenn das SQL aus 1.4.10 bereits erfolgreich ausgeführt wurde:
-- kein weiteres SQL ausführen
-- einfach 1.4.11 deployen
+Einfach deployen.
