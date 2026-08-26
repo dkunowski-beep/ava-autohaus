@@ -1,12 +1,7 @@
-# AVA 1.3.4 — Real Push Key Sync
+# AVA 1.3.5 — Real Push VAPID Fix
 
-The AVA frontend public VAPID key is now synchronized with the VAPID key pair configured as protected Supabase Edge Function secrets.
+- Frontend public VAPID key synchronized with the newly generated web-push key pair.
+- Private VAPID key remains only in Supabase Secrets.
+- Existing real push workflow remains unchanged.
 
-No private VAPID key is included in this package.
-
-After deployment:
-1. Open AVA from the iPhone Home Screen.
-2. Open the notification center.
-3. Tap “Echte Push-Mitteilungen auf diesem Gerät aktivieren”.
-4. Allow notifications in iOS.
-5. Close AVA and send a Team task from another account.
+After deployment, Anton's iPhone must create a NEW push subscription because the application server key changed.
