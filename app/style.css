@@ -120,3 +120,48 @@ body{background:var(--ava-bg)}
 .todoItem{background:#fff;border:1px solid var(--line);border-radius:14px;padding:11px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 5px 18px rgba(20,26,32,.03)}
 .todoCheck,.todoDelete{border:0;background:transparent}.todoCheck{width:28px;height:28px;border-radius:50%;background:#eef4fb;color:#0b6cff;font-size:18px}.todoDelete{font-size:18px;color:#9aa1a8}
 .todoMain{flex:1;min-width:0}.todoMain b,.todoMain span{display:block}.todoMain b{font-size:12px}.todoMain span{font-size:9px;color:var(--muted);margin-top:3px}.todoEmpty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:16px;color:var(--muted);font-size:10px}
+
+/* AVA 1.1 — Futuristic Automotive Dark UI */
+:root{
+ --bg:#03070d;--surface:#07101b;--surface2:#0a1624;--card:#08121f;--card2:#0b1929;
+ --text:#f3f8ff;--muted:#8191a6;--line:#13263c;--blue:#1683ff;--blue2:#42a5ff;
+ --glow:0 0 0 1px rgba(31,135,255,.12),0 18px 55px rgba(0,45,105,.16);
+}
+html,body{background:#03070d!important;color:var(--text)!important}
+body{background:radial-gradient(circle at 75% -10%,rgba(12,99,220,.13),transparent 27%),linear-gradient(180deg,#03070d,#050a11 70%)!important}
+.appShell,.workspace,.mainContent{background:transparent!important}
+.sidebar{background:linear-gradient(180deg,#02070d 0%,#06111e 100%)!important;border-right:1px solid #10243a!important;box-shadow:14px 0 45px rgba(0,0,0,.24)}
+.sideNav button{color:#7f91a8!important}.sideNav button:hover{background:#0a1b2e!important;color:#eaf4ff!important}.sideNav button.active{background:linear-gradient(135deg,#0b386f,#0a63c9)!important;color:#fff!important;box-shadow:0 0 24px rgba(22,131,255,.22)!important}
+.topbar{background:rgba(3,8,14,.82)!important;border-bottom:1px solid #10243a!important;backdrop-filter:blur(22px)!important}
+.topbar h2,.heroRow h1,.pageTitleRow h1,h1,h2,h3,b,strong{color:#f4f8fd}
+.eyebrow{color:#3b98ff!important;letter-spacing:.14em!important}.muted,small,.metricLabel,.subText{color:var(--muted)!important}
+.metric,.taskCard,.agenda,.customerCard,.calendarSurface,.historyCard,.teamCard,.opportunity,.todoItem,.todoEmpty,.detailSection,.weekColumn{
+ background:linear-gradient(145deg,rgba(10,22,37,.96),rgba(6,14,24,.98))!important;
+ border:1px solid #13283f!important;box-shadow:var(--glow)!important;
+}
+.metric:hover,.customerCard:hover,.taskCard:hover{border-color:#1c5c9f!important;box-shadow:0 0 0 1px rgba(27,132,255,.18),0 20px 55px rgba(0,71,156,.18)!important}
+.metricNumber{color:#57b0ff!important;text-shadow:0 0 22px rgba(30,142,255,.18)}
+.btn,.sideNav button,.customerLink,.agendaBody button{transition:.18s ease}
+.btn.primary,.docPrimary{background:linear-gradient(135deg,#0871e7,#1a94ff)!important;color:#fff!important;border:1px solid #2597ff!important;box-shadow:0 0 20px rgba(16,128,255,.18)!important}
+.btn.soft,.docSecondary{background:#0c1d30!important;color:#9fceff!important;border:1px solid #173c61!important}.btn.ghost{background:#07111d!important;color:#9fb1c6!important;border-color:#173049!important}
+input,textarea,select,.searchBox{background:#050d17!important;color:#edf6ff!important;border-color:#17314d!important}input:focus,textarea:focus,select:focus{border-color:#1889ff!important;box-shadow:0 0 0 3px rgba(24,137,255,.12)!important}
+input::placeholder,textarea::placeholder{color:#52657b!important}
+.drawer,.customerModal,.voiceModal,.historyPanel{background:linear-gradient(180deg,#07111e,#040a12)!important;color:#f4f8fd!important;border-color:#15314e!important}
+.drawer{box-shadow:-35px 0 100px rgba(0,0,0,.55)!important}.modalHead{border-color:#13263c!important}
+.detailRow,.miniHistory,.historyListItem,.docItem{border-color:#142a42!important;background:#081522!important}.detailRow span,.historyListItem span{color:#7f91a8!important}
+.statusBadge.blue,.miniStatus.planned{background:#082d58!important;color:#60b5ff!important}.statusBadge.green,.miniStatus.done{background:#092c22!important;color:#55d89b!important}.statusBadge.amber{background:#34260a!important;color:#ffc75d!important}.miniStatus.cancelled{background:#351116!important;color:#ff777f!important}
+.weekHead{background:#071522!important;border-color:#15314e!important}.weekEvent{background:#09203a!important;border:1px solid #174b7c!important}.weekEvent b{color:#5eb6ff!important}
+.calendarEvent{background:#081522!important;border-color:#15314e!important}.calendarEvent .eventAccent{background:linear-gradient(180deg,#1a94ff,#0758bd)!important;box-shadow:0 0 15px rgba(20,139,255,.4)}
+.todoCheck{background:#09203a!important;color:#53aeff!important}.todoDelete{color:#71849b!important}
+.docItem{color:#eaf4ff!important}.docIcon{background:#092541!important;color:#53aeff!important}
+.historyOpenBtn{background:#0a1b2c!important;border-color:#174168!important;color:#a9d5ff!important}
+.assistantActionGrid button{background:linear-gradient(145deg,#0a1b2d,#07131f)!important;border-color:#163a5d!important;color:#f3f8ff!important}.assistantActionGrid button>span{background:#092c50!important}
+.mobileNav{background:rgba(3,8,14,.94)!important;border-top:1px solid #15304b!important;box-shadow:0 -14px 40px rgba(0,0,0,.4)!important}.mobileNav button{color:#70859d!important}.mobileNav button.active{color:#48a8ff!important}
+.mobileVoice,.voiceOrb{background:radial-gradient(circle at 35% 30%,#55b8ff,#087eff 42%,#06254a 76%,#020a13)!important;box-shadow:0 0 34px rgba(18,139,255,.42)!important}
+.voiceBackdrop,.historyOverlay{background:rgba(0,4,10,.8)!important;backdrop-filter:blur(8px)}
+.voiceExamples button,.voiceResult{background:#081b2e!important;border-color:#17436d!important;color:#b8dcff!important}
+.authVisual{background:radial-gradient(circle at 25% 80%,rgba(13,115,255,.3),transparent 28%),linear-gradient(160deg,#02070d,#06182b 55%,#020810)!important}
+.authPanel,.loginPanel{background:#050b13!important;color:#f3f8ff!important}
+.dangerZone{border:1px solid #54222a;background:#170a0e;border-radius:14px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px}.dangerZone b,.dangerZone span{display:block}.dangerZone b{font-size:10px;color:#ff9299!important}.dangerZone span{font-size:8px;color:#9d7378!important;margin-top:3px}.dangerZone button{border:1px solid #73313a;background:#2a0d13;color:#ff9aa1;border-radius:9px;padding:8px 10px;font-size:9px;font-weight:850}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#03070d}::-webkit-scrollbar-thumb{background:#15304b;border-radius:10px}
+@media(max-width:760px){.workspace{background:radial-gradient(circle at 80% 0%,rgba(15,112,238,.11),transparent 25%),#03070d!important}.topbar{background:rgba(3,8,14,.9)!important}.dangerZone{align-items:flex-start;flex-direction:column}}

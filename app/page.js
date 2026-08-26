@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.0.1</div>
+      <div className="versionPill">Alpha 1.1</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -305,6 +305,19 @@ function Dashboard({session}){
     if(!window.confirm('To-do löschen?'))return;
     const {error}=await supabase.from('ava_todos').delete().eq('id',todo.id);
     if(error)alert(error.message);else await load();
+  }
+
+  async function deleteCustomer(customer){
+    const typed=window.prompt(`${customer.name} wirklich endgültig löschen?\n\nAlle Termine, Probefahrten, Nachkontakte, Aufgaben, Historieneinträge und Dokumente werden ebenfalls entfernt.\n\nZum Bestätigen LÖSCHEN eingeben:`);
+    if(typed!=='LÖSCHEN')return;
+    const customerDocs=documents.filter(d=>d.customer_id===customer.id);
+    if(customerDocs.length){
+      const {error:storageError}=await supabase.storage.from('ava-documents').remove(customerDocs.map(d=>d.storage_path));
+      if(storageError){alert('Dokumente konnten nicht vollständig gelöscht werden: '+storageError.message);return}
+    }
+    const {error}=await supabase.rpc('ava_delete_customer',{p_customer_id:customer.id});
+    if(error){alert(error.message);return}
+    setDetail(null);await load();
   }
 
   function taskCustomer(t){return customerMap[t.customer_id]||null}
@@ -557,7 +570,7 @@ function Dashboard({session}){
     </main>
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
-    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting}/>}
+    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
     {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} onListen={startVoice} onRun={runVoiceCommand} onClose={()=>{stopVoice();setVoiceOpen(false)}}/>}
   </div>;
 }
@@ -742,7 +755,7 @@ function TeamView({email}){
   </div>;
 }
 
-function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,onMail,onQuick,onUpload,onOpenDocument,onPurchase,onDeliveryStart,onDeliveryComplete,onWait}){
+function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,onMail,onQuick,onUpload,onOpenDocument,onPurchase,onDeliveryStart,onDeliveryComplete,onWait,onDelete}){
   const stage=STAGES[customer.stage]||STAGES.lead;
   return <div className="drawerBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
     <aside className="drawer">
@@ -775,6 +788,9 @@ function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,
         {tasks.filter(t=>t.status==='open').length?tasks.filter(t=>t.status==='open').map(t=><div className="miniTask" key={t.id}><b>{t.title}</b><span>{fmtDateTime(t.due_at)}</span></div>):<span className="muted">Keine offenen Aufgaben</span>}
       </DetailSection>
       <HistoryButton history={history}/>
+      <DetailSection title="Verwaltung">
+        <div className="dangerZone"><div><b>Kunde / Interessent löschen</b><span>Entfernt diesen Datensatz inklusive aller zugehörigen AVA-Daten endgültig.</span></div><button onClick={()=>onDelete(customer)}>Endgültig löschen</button></div>
+      </DetailSection>
 
     </aside>
   </div>;

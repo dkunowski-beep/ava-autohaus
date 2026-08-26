@@ -1,14 +1,19 @@
-# AVA 1.0.1 Productivity Update
+# AVA 1.1 — Futuristic Automotive
 
-New:
-- Personal To-do list on the Today screen
-- Add, complete, reopen and delete personal To-dos
-- To-dos are separate from AVA's automatic customer/workflow tasks
-- No date means today
-- Overdue unfinished To-dos remain visible instead of disappearing
-- Voice examples:
-  - "To-do für heute: CX-5 auf den Hof stellen"
-  - "Erinnere mich morgen daran, Preisschild CX-60 machen"
-- Existing AVA 1.0 Sales Assistant functionality retained
+Design 2.0:
+- Full futuristic dark automotive UI
+- Near-black/navy surfaces with electric AVA blue
+- Premium dark cards, inputs, calendar, customer records and mobile navigation
+- Blue glow accents without gaming-style overload
+- Voice assistant gets a stronger futuristic visual treatment
+- Status colors remain semantic: green = done, red = cancelled, amber = attention
 
+Customer deletion:
+- Delete customer/prospect from the customer record
+- Requires typing LÖSCHEN
+- Deletes linked AVA appointments, test drives, tasks, history and document metadata
+- Removes linked private offer files from Supabase Storage before deleting the customer
+- No archive workflow
+
+All AVA 1.0.1 Sales Assistant + Productivity functionality remains included.
 Use fictional test data only during alpha.
