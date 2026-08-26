@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.1.5</div>
+      <div className="versionPill">Alpha 1.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -95,6 +95,9 @@ function Dashboard({session}){
   const [calendarDate,setCalendarDate]=useState(new Date());
   const [calendarMode,setCalendarMode]=useState('month');
   const [editingEvent,setEditingEvent]=useState(null);
+  const [notifications,setNotifications]=useState([]);
+  const [notificationPrefs,setNotificationPrefs]=useState(null);
+  const [notificationOpen,setNotificationOpen]=useState(false);
   const [showForm,setShowForm]=useState(false);
   const [selected,setSelected]=useState(null);
   const [detail,setDetail]=useState(null);
@@ -110,19 +113,32 @@ function Dashboard({session}){
 
   async function load(){
     setBusy(true);
-    const [c,t,e,h,d,td]=await Promise.all([
+    const [c,t,e,h,d,td,n,np]=await Promise.all([
       supabase.from('ava_customers').select('*').eq('owner_id',uid).order('created_at',{ascending:false}),
       supabase.from('ava_tasks').select('*').eq('assigned_to',uid).order('due_at'),
       supabase.from('ava_events').select('*').eq('owner_id',uid).order('starts_at'),
       supabase.from('ava_history').select('*').eq('actor_id',uid).order('created_at',{ascending:false}),
       supabase.from('ava_documents').select('*').eq('owner_id',uid).order('created_at',{ascending:false}),
-      supabase.from('ava_todos').select('*').eq('user_id',uid).order('created_at',{ascending:false})
+      supabase.from('ava_todos').select('*').eq('user_id',uid).order('created_at',{ascending:false}),
+      supabase.from('ava_notifications').select('*').eq('user_id',uid).order('created_at',{ascending:false}).limit(40),
+      supabase.from('ava_notification_preferences').select('*').eq('user_id',uid).maybeSingle()
     ]);
-    setCustomers(c.data||[]); setTasks(t.data||[]); setEvents(e.data||[]); setHistory(h.data||[]); setDocuments(d.data||[]); setTodos(td.data||[]);
+    setCustomers(c.data||[]); setTasks(t.data||[]); setEvents(e.data||[]); setHistory(h.data||[]); setDocuments(d.data||[]); setTodos(td.data||[]); setNotifications(n.data||[]);
+    if(np.data)setNotificationPrefs(np.data);
+    else{
+      const defaults={user_id:uid,enabled:true,morning_brief:true,due_followups:true,test_drive_reminders:true,delivery_reminders:true,todo_reminders:true,opportunity_alerts:true,day_close:true};
+      await supabase.from('ava_notification_preferences').upsert(defaults);
+      setNotificationPrefs(defaults);
+    }
     setBusy(false);
   }
 
   useEffect(()=>{load()},[]);
+  useEffect(()=>{
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.register('/sw.js').catch(()=>{});
+    }
+  },[]);
   useEffect(()=>{
     const open=()=>{setVoiceOpen(true);setVoiceResult('')};
     window.addEventListener('ava-open-voice',open);
@@ -149,6 +165,44 @@ function Dashboard({session}){
     if(!q)return customers;
     return customers.filter(c=>[c.name,c.customer_number,c.phone,c.email,c.vehicle_interest,STAGES[c.stage]?.label].filter(Boolean).join(' ').toLowerCase().includes(q));
   },[customers,search]);
+
+  const smartRecommendations=useMemo(()=>{
+    const recs=[];
+    const now=new Date();
+    const open=tasks.filter(t=>t.status==='open');
+    const customerFor=id=>customerMap[id];
+    open.forEach(t=>{
+      const c=customerFor(t.customer_id);
+      const due=new Date(t.due_at);
+      if(due<now){
+        recs.push({key:'task-'+t.id,score:100,title:t.title,body:c?`${c.name} · ${c.vehicle_interest||'Fahrzeug'}`:(t.details||''),tag:'Überfällig',tone:'danger',customer:c});
+      }
+    });
+    contractAlerts.forEach(c=>recs.push({key:'contract-'+c.id,score:75,title:'Vertragschance nutzen',body:`${c.name} · Vertragsende ${fmtDate(c.contract_end_date)}`,tag:'Chance',tone:'blue',customer:c}));
+    customers.forEach(c=>{
+      if(['lead','test_drive','offer'].includes(c.stage)&&!c.waiting_on_customer){
+        const hasTask=open.some(t=>t.customer_id===c.id);
+        const hasFutureEvent=events.some(e=>e.customer_id===c.id&&e.status!=='cancelled'&&new Date(e.starts_at)>now);
+        if(!hasTask&&!hasFutureEvent){
+          recs.push({key:'nostep-'+c.id,score:88,title:'Kein nächster Schritt geplant',body:`${c.name} · ${c.vehicle_interest||'Interessent'}`,tag:'AVA entdeckt',tone:'amber',customer:c});
+        }
+      }
+    });
+    return recs.sort((a,b)=>b.score-a.score).slice(0,5);
+  },[tasks,customers,events,contractAlerts,customerMap]);
+
+  const dayCloseSummary=useMemo(()=>{
+    const end=new Date();end.setHours(23,59,59,999);
+    const tomorrowStart=new Date(end);tomorrowStart.setMilliseconds(1);
+    const tomorrowEnd=new Date(tomorrowStart);tomorrowEnd.setHours(23,59,59,999);
+    return {
+      openToday:tasks.filter(t=>t.status==='open'&&new Date(t.due_at)<=end).length,
+      tomorrowEvents:events.filter(e=>e.status!=='cancelled'&&new Date(e.starts_at)>=tomorrowStart&&new Date(e.starts_at)<=tomorrowEnd).length,
+      tomorrowTestDrives:events.filter(e=>e.event_type==='test_drive'&&e.status!=='cancelled'&&new Date(e.starts_at)>=tomorrowStart&&new Date(e.starts_at)<=tomorrowEnd).length,
+      tomorrowDeliveries:events.filter(e=>e.event_type==='delivery'&&e.status!=='cancelled'&&new Date(e.starts_at)>=tomorrowStart&&new Date(e.starts_at)<=tomorrowEnd).length
+    };
+  },[tasks,events]);
+
 
   function fresh(){setSelected(null);setForm(emptyForm);setShowForm(true)}
   function edit(c){
@@ -379,6 +433,81 @@ function Dashboard({session}){
       });
     }
     await load();
+  }
+
+  async function requestNotificationPermission(){
+    if(!('Notification' in window)){alert('Dieser Browser unterstützt keine Benachrichtigungen.');return}
+    const permission=await Notification.requestPermission();
+    if(permission==='granted'){
+      await showSystemNotification('AVA Benachrichtigungen aktiv','AVA meldet sich, wenn etwas Wichtiges ansteht.');
+    }
+  }
+
+  async function showSystemNotification(title,body){
+    if(!('Notification' in window)||Notification.permission!=='granted')return;
+    try{
+      const reg=await navigator.serviceWorker.ready;
+      await reg.showNotification(title,{body,icon:'/icon-192.svg',badge:'/icon-192.svg',tag:'ava-'+title});
+    }catch(_e){}
+  }
+
+  async function saveNotification(kind,title,body,sourceKey){
+    const {data,error}=await supabase.from('ava_notifications').upsert({
+      user_id:uid,kind,title,body,source_key:sourceKey,scheduled_for:new Date().toISOString()
+    },{onConflict:'user_id,kind,source_key',ignoreDuplicates:true}).select().maybeSingle();
+    if(!error&&data){
+      setNotifications(prev=>[data,...prev.filter(x=>x.id!==data.id)]);
+      if(notificationPrefs?.enabled!==false)await showSystemNotification(title,body);
+    }
+  }
+
+  async function markNotificationsRead(){
+    await supabase.from('ava_notifications').update({read_at:new Date().toISOString()}).eq('user_id',uid).is('read_at',null);
+    setNotifications(prev=>prev.map(n=>({...n,read_at:n.read_at||new Date().toISOString()})));
+  }
+
+  async function updateNotificationPref(key,value){
+    const next={...(notificationPrefs||{}),user_id:uid,[key]:value,updated_at:new Date().toISOString()};
+    setNotificationPrefs(next);
+    await supabase.from('ava_notification_preferences').upsert(next);
+  }
+
+  async function runSmartNotifications(){
+    if(!notificationPrefs||notificationPrefs.enabled===false)return;
+    const now=new Date();
+    const in60=new Date(now.getTime()+60*60000);
+    if(notificationPrefs.due_followups){
+      for(const t of tasks.filter(t=>t.status==='open')){
+        const due=new Date(t.due_at);
+        if(due<=now){
+          const c=customerMap[t.customer_id];
+          await saveNotification('followup',t.title,c?`${c.name} · ${c.vehicle_interest||''}`:(t.details||''),'task-'+t.id);
+        }
+      }
+    }
+    if(notificationPrefs.test_drive_reminders){
+      for(const e of events.filter(e=>e.event_type==='test_drive'&&e.status==='planned')){
+        const start=new Date(e.starts_at);
+        if(start>now&&start<=in60){
+          const c=customerMap[e.customer_id];
+          await saveNotification('test_drive','Probefahrt in weniger als 1 Stunde',c?`${c.name} · ${e.vehicle||c.vehicle_interest||''}`:e.title,'event-'+e.id+'-60');
+        }
+      }
+    }
+    if(notificationPrefs.delivery_reminders){
+      for(const e of events.filter(e=>e.event_type==='delivery'&&e.status==='planned')){
+        const start=new Date(e.starts_at);
+        if(start>now&&start<=in60){
+          const c=customerMap[e.customer_id];
+          await saveNotification('delivery','Auslieferung in weniger als 1 Stunde',c?`${c.name} · ${c.purchased_vehicle||c.vehicle_interest||''}`:e.title,'delivery-'+e.id+'-60');
+        }
+      }
+    }
+    if(notificationPrefs.opportunity_alerts){
+      for(const r of smartRecommendations.filter(r=>r.tag==='AVA entdeckt')){
+        await saveNotification('smart','AVA hat etwas entdeckt',r.body,r.key);
+      }
+    }
   }
 
   function taskCustomer(t){return customerMap[t.customer_id]||null}
@@ -639,12 +768,20 @@ function Dashboard({session}){
     setVoiceResult('Diesen Befehl versteht AVA 0.8 noch nicht. Unterstützt werden aktuell: Probefahrt planen, Kunde nicht erreicht, Sprachnotiz und Kundenakte öffnen.');
   }
 
+  useEffect(()=>{
+    if(!busy&&notificationPrefs){
+      runSmartNotifications();
+      const id=setInterval(runSmartNotifications,60000);
+      return()=>clearInterval(id);
+    }
+  },[busy,notificationPrefs,tasks,events,customers]);
+
   return <div className="appShell">
     <Sidebar tab={tab} setTab={setTab} email={session.user.email}/>
     <main className="workspace">
-      <Topbar tab={tab} onNew={fresh} onVoice={()=>{setVoiceOpen(true);setVoiceResult('')}}/>
+      <Topbar tab={tab} onNew={fresh} onVoice={()=>{setVoiceOpen(true);setVoiceResult('')}} unread={notifications.filter(n=>!n.read_at).length} onNotifications={()=>setNotificationOpen(true)}/>
       {busy?<LoadingState/>:<>
-        {tab==='Heute'&&<TodayView openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
+        {tab==='Heute'&&<TodayView openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} smartRecommendations={smartRecommendations} dayCloseSummary={dayCloseSummary} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
         {tab==='Kunden'&&<CustomersView customers={filteredCustomers} search={search} setSearch={setSearch} onOpen={setDetail} onEdit={edit} onMail={openMail} onNew={fresh}/>}
         {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} calendarMode={calendarMode} setCalendarMode={setCalendarMode} calendarDate={calendarDate} setCalendarDate={setCalendarDate} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive} onNewEvent={(date)=>{setEditingEvent(null);if(date)setCalendarDate(date);setCalendarFormOpen(true)}} onEditEvent={(e)=>{setEditingEvent(e);setCalendarFormOpen(true)}} onDeleteEvent={deleteCalendarEvent}/>}        {tab==='Team'&&<TeamView email={session.user.email}/>}
       </>}
@@ -652,6 +789,7 @@ function Dashboard({session}){
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
     {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
+    {notificationOpen&&<NotificationCenter notifications={notifications} prefs={notificationPrefs} onClose={()=>{setNotificationOpen(false);markNotificationsRead()}} onPermission={requestNotificationPermission} onPref={updateNotificationPref}/>} 
     {calendarFormOpen&&<CalendarEventForm customers={customers} event={editingEvent} defaultDate={calendarDate} onClose={()=>{setCalendarFormOpen(false);setEditingEvent(null)}} onSave={createManualEvent}/>}
     {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} onListen={startVoice} onRun={runVoiceCommand} onClose={()=>{stopVoice();setVoiceOpen(false)}}/>}
   </div>;
@@ -666,14 +804,14 @@ function Sidebar({tab,setTab,email}){
   </aside>;
 }
 
-function Topbar({tab,onNew,onVoice}){
+function Topbar({tab,onNew,onVoice,unread,onNotifications}){
   return <header className="topbar">
     <div><span className="eyebrow">AVA · Markenautohaus</span><h2>{tab}</h2></div>
-    <div className="topActions"><button className="btn soft voiceBtn" onClick={onVoice}>🎙 AVA</button><button className="btn primary" onClick={onNew}>+ Kunde</button></div>
+    <div className="topActions"><button className="notificationBell" onClick={onNotifications}>🔔{unread>0&&<span>{unread}</span>}</button><button className="btn soft voiceBtn" onClick={onVoice}>🎙 AVA</button><button className="btn primary" onClick={onNew}>+ Kunde</button></div>
   </header>;
 }
 
-function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,todos,onAddTodo,onToggleTodo,onDeleteTodo,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
+function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,todos,smartRecommendations,dayCloseSummary,onAddTodo,onToggleTodo,onDeleteTodo,onReached,onNotReached,onDone,onOpenCustomer,onQuick}){
   return <div className="page">
     <div className="heroRow">
       <div><span className="eyebrow">Heute im Verkauf</span><h1>Mehr Zeit für den Verkauf.</h1><p>AVA erinnert, organisiert und hält dir den Rücken frei – damit du dich auf deine Kunden konzentrieren kannst.</p></div>
@@ -685,6 +823,13 @@ function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,t
       <Metric n={customers.length} label="Meine Kunden" sub="aktive Datensätze"/>
       <Metric n={contractAlerts.length} label="Vertragschancen" sub="ca. 6 Monate vorher"/>
     </div>
+
+    <section className="smartSection">
+      <div className="sectionTitle"><h2>AVA empfiehlt</h2><span>Deine wichtigsten nächsten Schritte</span></div>
+      <div className="smartGrid">
+        {smartRecommendations.length?smartRecommendations.map(r=><button key={r.key} className={`smartCard ${r.tone||''}`} onClick={()=>r.customer&&onOpenCustomer(r.customer)}><span className="smartTag">{r.tag}</span><b>{r.title}</b><small>{r.body}</small><span className="smartArrow">›</span></button>):<EmptyState title="Alles sauber" text="AVA findet aktuell keinen Vorgang ohne nächsten Schritt." compact/>}
+      </div>
+    </section>
 
     <section className="todoSection">
       <div className="sectionTitle"><h2>Meine To-dos</h2><button className="btn soft smallBtn" onClick={onAddTodo}>+ Hinzufügen</button></div>
@@ -708,6 +853,10 @@ function TodayView({openTasks,todayEvents,customers,contractAlerts,customerMap,t
         </>}
       </aside>
     </div>
+    <section className="dayClose">
+      <div><span className="eyebrow">Tagesabschluss</span><h2>Alles für Feierabend im Blick.</h2><p>{dayCloseSummary.openToday} offene Aufgabe(n) heute · Morgen {dayCloseSummary.tomorrowEvents} Termin(e), davon {dayCloseSummary.tomorrowTestDrives} Probefahrt(en) und {dayCloseSummary.tomorrowDeliveries} Auslieferung(en).</p></div>
+      <div className="dayCloseBadge">{dayCloseSummary.openToday===0?'✓ Alles erledigt':`${dayCloseSummary.openToday} offen`}</div>
+    </section>
   </div>;
 }
 
@@ -1043,6 +1192,27 @@ function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
     </div>
   </div>;
 }
+
+function NotificationCenter({notifications,prefs,onClose,onPermission,onPref}){
+  return <div className="drawerBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
+    <aside className="drawer notificationDrawer">
+      <div className="drawerHead"><div><span className="eyebrow">AVA Notifications</span><h2>Benachrichtigungen</h2><p>AVA meldet sich, wenn wirklich etwas wichtig wird.</p></div><button className="closeButton" onClick={onClose}>×</button></div>
+      <button className="btn primary wide notificationPermission" onClick={onPermission}>Push-Mitteilungen auf diesem Gerät aktivieren</button>
+      <DetailSection title="Einstellungen">
+        <NotificationToggle label="Benachrichtigungen" value={prefs?.enabled!==false} onChange={v=>onPref('enabled',v)}/>
+        <NotificationToggle label="Fällige Nachkontakte" value={prefs?.due_followups!==false} onChange={v=>onPref('due_followups',v)}/>
+        <NotificationToggle label="Probefahrten" value={prefs?.test_drive_reminders!==false} onChange={v=>onPref('test_drive_reminders',v)}/>
+        <NotificationToggle label="Auslieferungen" value={prefs?.delivery_reminders!==false} onChange={v=>onPref('delivery_reminders',v)}/>
+        <NotificationToggle label="Persönliche To-dos" value={prefs?.todo_reminders!==false} onChange={v=>onPref('todo_reminders',v)}/>
+        <NotificationToggle label="AVA Chancen / Nichts vergessen" value={prefs?.opportunity_alerts!==false} onChange={v=>onPref('opportunity_alerts',v)}/>
+      </DetailSection>
+      <DetailSection title="Letzte Meldungen">
+        <div className="notificationList">{notifications.length?notifications.map(n=><div className={`notificationItem ${!n.read_at?'unread':''}`} key={n.id}><span className="notificationDot"/><div><b>{n.title}</b><p>{n.body}</p><small>{fmtDateTime(n.created_at)}</small></div></div>):<div className="muted">Noch keine Benachrichtigungen.</div>}</div>
+      </DetailSection>
+    </aside>
+  </div>;
+}
+function NotificationToggle({label,value,onChange}){return <label className="notificationToggle"><span>{label}</span><input type="checkbox" checked={!!value} onChange={e=>onChange(e.target.checked)}/><i/></label>}
 
 function MobileNav({tab,setTab}){
   const items=[['Heute','⌂'],['Kalender','▦'],['Kunden','◉'],['Team','◇']];
