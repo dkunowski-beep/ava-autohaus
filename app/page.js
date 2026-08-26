@@ -5,6 +5,7 @@ import {createClient} from '@supabase/supabase-js';
 const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const supabase=(url&&key)?createClient(url,key):null;
+const AVA_VAPID_PUBLIC_KEY='BNK7dT54S_FI8AEnrCLDgPf6wRNJsmTThTxl7k155_dqaRz1o7MzEHa8KQXTfJ5PlX1hipsKF92WBRp23T3aizo';
 
 const STAGES={
   lead:{label:'Lead',tone:'neutral'},
@@ -60,7 +61,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.3.2.2</div>
+      <div className="versionPill">Alpha 1.3.3.3.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -79,6 +80,13 @@ function Login(){
       </div>
     </div>
   </div>;
+}
+
+function urlBase64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=window.atob(base64);
+  return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
 }
 
 function Dashboard({session}){
@@ -444,10 +452,38 @@ function Dashboard({session}){
   }
 
   async function requestNotificationPermission(){
-    if(!('Notification' in window)){alert('Dieser Browser unterstützt keine Benachrichtigungen.');return}
+    if(!('Notification' in window)||!('serviceWorker' in navigator)||!('PushManager' in window)){
+      alert('Dieses Gerät unterstützt Web Push hier nicht.');
+      return;
+    }
     const permission=await Notification.requestPermission();
-    if(permission==='granted'){
-      await showSystemNotification('AVA Benachrichtigungen aktiv','AVA meldet sich, wenn etwas Wichtiges ansteht.');
+    if(permission!=='granted'){
+      alert('Push-Mitteilungen wurden nicht erlaubt.');
+      return;
+    }
+    try{
+      const reg=await navigator.serviceWorker.ready;
+      let sub=await reg.pushManager.getSubscription();
+      if(!sub){
+        sub=await reg.pushManager.subscribe({
+          userVisibleOnly:true,
+          applicationServerKey:urlBase64ToUint8Array(AVA_VAPID_PUBLIC_KEY)
+        });
+      }
+      const j=sub.toJSON();
+      const {error}=await supabase.from('ava_push_subscriptions').upsert({
+        user_id:uid,
+        endpoint:j.endpoint,
+        p256dh:j.keys?.p256dh,
+        auth:j.keys?.auth,
+        user_agent:navigator.userAgent,
+        updated_at:new Date().toISOString()
+      },{onConflict:'user_id,endpoint'});
+      if(error)throw error;
+      await showSystemNotification('AVA Push ist aktiv','Dieses Gerät kann jetzt echte Team-Pushs empfangen.');
+      alert('Push-Mitteilungen sind auf diesem Gerät aktiviert.');
+    }catch(e){
+      alert('Push konnte nicht eingerichtet werden: '+(e?.message||e));
     }
   }
 
@@ -538,13 +574,30 @@ function Dashboard({session}){
       p_recipient_id:recipient.user_id,p_body:text,p_as_task:teamAsTask,p_due_at:dueAt
     });
     if(error){alert(error.message);return}
+    const senderName=teamMembers.find(m=>m.user_id===uid)?.display_name||'Kollege';
+    await supabase.functions.invoke('ava-push',{body:{
+      recipient_id:recipient.user_id,
+      title:teamAsTask?`Neue Aufgabe von ${senderName}`:`Neue Nachricht von ${senderName}`,
+      body:text,
+      url:'/'
+    }}).catch(()=>{});
     setTeamText('');setTeamAsTask(false);
     await load();
   }
 
   async function completeAssignedTodo(todo){
+    const assigner=todo.assigned_by;
     const {error}=await supabase.rpc('ava_complete_assigned_todo',{p_todo_id:todo.id});
     if(error){alert(error.message);return}
+    if(assigner){
+      const myName=teamMembers.find(m=>m.user_id===uid)?.display_name||'Kollege';
+      await supabase.functions.invoke('ava-push',{body:{
+        recipient_id:assigner,
+        title:`${myName} hat deine Aufgabe erledigt`,
+        body:todo.title,
+        url:'/'
+      }}).catch(()=>{});
+    }
     await load();
   }
 
@@ -1269,7 +1322,7 @@ function NotificationCenter({notifications,prefs,onClose,onPermission,onPref}){
   return <div className="drawerBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
     <aside className="drawer notificationDrawer">
       <div className="drawerHead"><div><span className="eyebrow">AVA Notifications</span><h2>Benachrichtigungen</h2><p>AVA meldet sich, wenn wirklich etwas wichtig wird.</p></div><button className="closeButton" onClick={onClose}>×</button></div>
-      <button className="btn primary wide notificationPermission" onClick={onPermission}>Push-Mitteilungen auf diesem Gerät aktivieren</button>
+      <button className="btn primary wide notificationPermission" onClick={onPermission}>Echte Push-Mitteilungen auf diesem Gerät aktivieren</button>
       <DetailSection title="Einstellungen">
         <NotificationToggle label="Benachrichtigungen" value={prefs?.enabled!==false} onChange={v=>onPref('enabled',v)}/>
         <NotificationToggle label="Fällige Nachkontakte" value={prefs?.due_followups!==false} onChange={v=>onPref('due_followups',v)}/>

@@ -1,11 +1,22 @@
-# AVA 1.3.2 — Team Assistant Runtime Fix
+# AVA 1.3.3 — Real Push
 
-Fixes the client-side exception after refreshing AVA 1.3.1.
+Real Web Push for the Team Assistant:
+- Registers an iPhone/desktop PWA PushSubscription
+- Stores the subscription privately in Supabase
+- Team messages call the secure `ava-push` Supabase Edge Function
+- Assigned tasks push “Neue Aufgabe von …”
+- Normal messages push “Neue Nachricht von …”
+- Completing an assigned task pushes back to the sender
+- Service worker displays push notifications even when AVA is not open
+- Tapping the push opens/focuses AVA
 
-Fixed:
-- TodayView now correctly receives team members and the current user ID.
-- The Team navigation now uses the new Team Assistant component signature.
-- Defensive defaults keep AVA stable before the Team Supabase migration is applied.
+Infrastructure already prepared:
+- `ava_push_subscriptions` table
+- `ava-push` Edge Function
 
-Next step after successful deployment:
-Apply `supabase/ava_1_3_team_assistant.sql` in Supabase.
+Required after deploy:
+Configure Supabase Edge Function secrets:
+`AVA_VAPID_PUBLIC_KEY`
+`AVA_VAPID_PRIVATE_KEY`
+
+Then each iPhone must press “Echte Push-Mitteilungen auf diesem Gerät aktivieren” once in AVA.
