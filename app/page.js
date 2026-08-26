@@ -1219,6 +1219,21 @@ function CustomersView({customers,search,setSearch,onOpen,onEdit,onMail,onNew}){
   </div>;
 }
 
+function contactSourceLabel(v){
+  return ({
+    showroom:'Showroom-Besuch',
+    online:'Online-Anfrage',
+    phone:'Telefonanruf',
+    referral:'Empfehlung',
+    email:'E-Mail',
+    manufacturer:'Hersteller-Lead',
+    existing:'Bestandskunde',
+    event:'Veranstaltung / Event',
+    social:'Social Media',
+    other:'Sonstiges'
+  })[v] || '—';
+}
+
 function CustomerCard({c,onOpen,onEdit,onMail}){
   const stage=STAGES[c.stage]||STAGES.lead;
   return <article className="customerCard">
