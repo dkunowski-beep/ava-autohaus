@@ -1,7 +1,13 @@
-# AVA 1.4.0
+# AVA 1.4.1 — Push Subject + Calendar Delete Fix
 
-- Keeps the 1.3.9 fresh PushSubscription/VAPID fix.
-- Adds a prominent “Termin löschen” button directly inside the appointment edit dialog.
-- Voice-created appointments are written directly to the authenticated user's `ava_events` calendar and reloaded immediately.
-- Voice calendar creation performs an overlap check and shows a clear success/error result.
-- Existing refresh, calendar edit and iPhone voice confirmation fixes remain included.
+Server-side push fix:
+- AVA Push now uses the real AVA HTTPS URL as the VAPID subject instead of an invalid `.local` mail address.
+- This addresses Apple's `403 BadJwtToken` rejection.
+
+Calendar delete fix:
+- Uses the new secure `ava_delete_calendar_event` RPC.
+- Deletes only events owned by the signed-in user.
+- Clear success/error feedback.
+- Edit dialog closes only after a confirmed successful delete.
+
+All AVA 1.4.0 voice/calendar and 1.3.9 push re-subscription functionality remains included.

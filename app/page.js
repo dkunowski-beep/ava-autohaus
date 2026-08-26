@@ -61,7 +61,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.4.0.5.4.3.2</div>
+      <div className="versionPill">Alpha 1.4.1.5.4.3.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -441,15 +441,16 @@ function Dashboard({session}){
   }
 
   async function deleteCalendarEvent(event){
-    if(!window.confirm(`Termin „${event.title}“ wirklich löschen?`))return;
-    const {error}=await supabase.from('ava_events').delete().eq('id',event.id);
-    if(error){alert(error.message);return}
-    if(event.customer_id){
-      await supabase.from('ava_history').insert({
-        customer_id:event.customer_id,actor_id:uid,action:'Termin gelöscht',details:`${event.title} · ${fmtDateTime(event.starts_at)}`
-      });
+    if(!event?.id){alert('Termin konnte nicht eindeutig erkannt werden.');return false}
+    if(!window.confirm(`Termin „${event.title}“ wirklich endgültig löschen?`))return false;
+    const {error}=await supabase.rpc('ava_delete_calendar_event',{p_event_id:event.id});
+    if(error){
+      alert(error.message.includes('EVENT_NOT_FOUND')?'Termin wurde nicht gefunden oder gehört nicht zu deinem Kalender.':'Termin konnte nicht gelöscht werden: '+error.message);
+      return false;
     }
     await load();
+    alert('Termin wurde gelöscht.');
+    return true;
   }
 
   async function requestNotificationPermission(){

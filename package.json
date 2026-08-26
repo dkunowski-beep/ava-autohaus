@@ -1,6 +1,6 @@
 {
-  "name": "ava-alpha-140",
-  "version": "1.4.0",
+  "name": "ava-alpha-141",
+  "version": "1.4.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
