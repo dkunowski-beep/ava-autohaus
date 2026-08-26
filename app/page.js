@@ -61,7 +61,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.4.1.5.4.3.2</div>
+      <div className="versionPill">Alpha 1.4.2.5.4.3.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -929,7 +929,7 @@ function Dashboard({session}){
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
     {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
     {notificationOpen&&<NotificationCenter notifications={notifications} prefs={notificationPrefs} onClose={()=>{setNotificationOpen(false);markNotificationsRead()}} onPermission={requestNotificationPermission} onPref={updateNotificationPref}/>} 
-    {calendarFormOpen&&<CalendarEventForm customers={customers} event={editingEvent} defaultDate={calendarDate} onClose={()=>{setCalendarFormOpen(false);setEditingEvent(null)}} onSave={createManualEvent}/>}
+    {calendarFormOpen&&<CalendarEventForm customers={customers} event={editingEvent} defaultDate={calendarDate} onClose={()=>{setCalendarFormOpen(false);setEditingEvent(null)}} onSave={createManualEvent} onDelete={async()=>{if(!editingEvent)return;const ok=await deleteCalendarEvent(editingEvent);if(ok){setCalendarFormOpen(false);setEditingEvent(null)}}}/>}
     {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} running={voiceRunning} onListen={startVoice} onRun={async()=>{if(voiceRunning)return;setVoiceRunning(true);setVoiceResult('AVA übernimmt den Befehl…');try{await runVoiceCommand()}catch(e){setVoiceResult('Fehler beim Übernehmen: '+(e?.message||e))}finally{setVoiceRunning(false)}}} onClose={()=>{stopVoice();setVoiceOpen(false)}}/>}
   </div>;
 }
@@ -1104,7 +1104,7 @@ function CalendarEventForm({customers,event,defaultDate,onClose,onSave,onDelete}
       <Field label="Kunde / Interessent" hint="Optional"><select value={form.customer_id} onChange={e=>set('customer_id',e.target.value)}><option value="">Kein Kunde zugeordnet</option>{customers.map(c=><option key={c.id} value={c.id}>{c.name}{c.customer_number?` · KD ${c.customer_number}`:''}</option>)}</select></Field>
       <Field label="Notiz" full><textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Optional…"/></Field>
     </div></div>
-    <div className="modalFoot calendarEditFoot"><div>{event&&<button type="button" className="btn dangerBtn" onClick={onDelete}>🗑 Termin löschen</button>}</div><div><button type="button" className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary">{event?'Änderungen speichern':'Termin speichern'}</button></div></div>
+    <div className="modalFoot calendarEditFoot"><div>{event&&<button type="button" className="btn dangerBtn" onClick={()=>{if(typeof onDelete==="function")onDelete();else alert("Löschfunktion ist nicht verbunden.")}}>🗑 Termin löschen</button>}</div><div><button type="button" className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary">{event?'Änderungen speichern':'Termin speichern'}</button></div></div>
   </form></div>;
 }
 
