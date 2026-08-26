@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.1</div>
+      <div className="versionPill">Alpha 1.1.1</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -95,6 +95,7 @@ function Dashboard({session}){
   const [showForm,setShowForm]=useState(false);
   const [selected,setSelected]=useState(null);
   const [detail,setDetail]=useState(null);
+  const [calendarFormOpen,setCalendarFormOpen]=useState(false);
   const [search,setSearch]=useState('');
   const [voiceOpen,setVoiceOpen]=useState(false);
   const [voiceText,setVoiceText]=useState('');
@@ -320,6 +321,22 @@ function Dashboard({session}){
     setDetail(null);await load();
   }
 
+  async function createManualEvent(payload){
+    const {error}=await supabase.rpc('ava_create_calendar_event',{
+      p_title:payload.title,
+      p_starts_at:new Date(payload.starts_at).toISOString(),
+      p_minutes:Number(payload.minutes||60),
+      p_customer_id:payload.customer_id||null,
+      p_event_type:payload.event_type||'appointment',
+      p_notes:payload.notes||null
+    });
+    if(error){
+      alert(error.message.includes('TERMIN_CONFLICT')?'Terminüberschneidung erkannt. Bitte einen anderen Zeitpunkt wählen.':error.message);
+      return false;
+    }
+    setCalendarFormOpen(false);await load();return true;
+  }
+
   function taskCustomer(t){return customerMap[t.customer_id]||null}
   async function uploadOffer(customer,file){
     if(!file)return;
@@ -459,6 +476,26 @@ function Dashboard({session}){
     const q=text.toLowerCase();
     const c=findCustomerInSpeech(text);
 
+    if(q.startsWith('termin ')||q.includes('termin morgen')||q.includes('termin mit ')||q.includes('teammeeting')){
+      const when=parseSpeechDate(text);
+      if(!when){setVoiceResult('Datum/Uhrzeit konnte ich nicht eindeutig erkennen. Beispiel: „Termin morgen um 10 Uhr: Teammeeting.“');return}
+      const vc=findCustomerInSpeech(text);
+      let title=text
+        .replace(/^ava[,:\s-]*/i,'')
+        .replace(/^termin\s*/i,'')
+        .replace(/\b(?:heute|morgen|übermorgen|uebermorgen|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b/ig,'')
+        .replace(/\bum\s+\d{1,2}(?:(?::|\.)\d{2})?\s*uhr\b/ig,'')
+        .replace(/\bmit\s+.+$/i, vc?'':'$&')
+        .replace(/^[:\s,-]+|[:\s,-]+$/g,'')
+        .trim();
+      if(vc) title=title.replace(new RegExp(`\\bmit\\s+${vc.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`,'i'),'').trim();
+      if(!title||title.toLowerCase()==='termin')title=vc?`Termin mit ${vc.name}`:'Persönlicher Termin';
+      const {error}=await supabase.rpc('ava_create_calendar_event',{p_title:title,p_starts_at:when.toISOString(),p_minutes:60,p_customer_id:vc?.id||null,p_event_type:'appointment',p_notes:`Per AVA Voice: ${text}`});
+      if(error)setVoiceResult(error.message.includes('TERMIN_CONFLICT')?'Terminüberschneidung erkannt. Bitte nenne einen anderen Zeitpunkt.':error.message);
+      else{setVoiceResult(`✓ Termin „${title}“ am ${when.toLocaleString('de-DE')} angelegt.`);await load()}
+      return;
+    }
+
     if(
       q.includes('neuer interessent')||
       q.includes('neue interessentin')||
@@ -565,12 +602,13 @@ function Dashboard({session}){
       {busy?<LoadingState/>:<>
         {tab==='Heute'&&<TodayView openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
         {tab==='Kunden'&&<CustomersView customers={filteredCustomers} search={search} setSearch={setSearch} onOpen={setDetail} onEdit={edit} onMail={openMail} onNew={fresh}/>}
-        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} week={week} setWeek={setWeek} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive}/>}        {tab==='Team'&&<TeamView email={session.user.email}/>}
+        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} week={week} setWeek={setWeek} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive} onNewEvent={()=>setCalendarFormOpen(true)}/>}        {tab==='Team'&&<TeamView email={session.user.email}/>}
       </>}
     </main>
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
     {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
+    {calendarFormOpen&&<CalendarEventForm customers={customers} onClose={()=>setCalendarFormOpen(false)} onSave={createManualEvent}/>}
     {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} onListen={startVoice} onRun={runVoiceCommand} onClose={()=>{stopVoice();setVoiceOpen(false)}}/>}
   </div>;
 }
@@ -701,11 +739,29 @@ function CustomerCard({c,onOpen,onEdit,onMail}){
   </article>;
 }
 
-function CalendarView({events,customerMap,week,setWeek,onOpenCustomer,onSetStatus,onReschedule,onCompleteTestDrive}){
+function CalendarEventForm({customers,onClose,onSave}){
+  const [form,setForm]=useState({title:'',starts_at:'',minutes:60,customer_id:'',event_type:'appointment',notes:''});
+  const set=(k,v)=>setForm({...form,[k]:v});
+  async function submit(e){e.preventDefault();await onSave(form)}
+  return <div className="modalBackdrop"><form className="customerModal compactModal" onSubmit={submit}>
+    <div className="modalHead"><div><span className="eyebrow">Kalender</span><h2>Termin anlegen</h2><p>Kunde ist optional. AVA prüft Terminüberschneidungen automatisch.</p></div><button type="button" className="closeButton" onClick={onClose}>×</button></div>
+    <div className="formSection"><div className="formGrid">
+      <Field label="Titel" full><input required value={form.title} onChange={e=>set('title',e.target.value)} placeholder="z. B. Teammeeting, Beratung, Rückruf"/></Field>
+      <Field label="Datum & Uhrzeit"><input required type="datetime-local" value={form.starts_at} onChange={e=>set('starts_at',e.target.value)}/></Field>
+      <Field label="Dauer"><select value={form.minutes} onChange={e=>set('minutes',e.target.value)}><option value="30">30 Minuten</option><option value="45">45 Minuten</option><option value="60">60 Minuten</option><option value="90">90 Minuten</option><option value="120">2 Stunden</option></select></Field>
+      <Field label="Terminart"><select value={form.event_type} onChange={e=>set('event_type',e.target.value)}><option value="appointment">Termin</option><option value="consultation">Beratung</option><option value="callback">Rückruf</option><option value="meeting">Besprechung</option><option value="delivery">Fahrzeugübergabe</option><option value="internal">Interner Termin</option></select></Field>
+      <Field label="Kunde / Interessent" hint="Optional"><select value={form.customer_id} onChange={e=>set('customer_id',e.target.value)}><option value="">Kein Kunde zugeordnet</option>{customers.map(c=><option key={c.id} value={c.id}>{c.name}{c.customer_number?` · KD ${c.customer_number}`:''}</option>)}</select></Field>
+      <Field label="Notiz" full><textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Optional…"/></Field>
+    </div></div>
+    <div className="modalFoot"><span>AVA prüft vorhandene Termine vor dem Speichern.</span><div><button type="button" className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary">Termin speichern</button></div></div>
+  </form></div>;
+}
+
+function CalendarView({events,customerMap,week,setWeek,onOpenCustomer,onSetStatus,onReschedule,onCompleteTestDrive,onNewEvent}){
   const today=new Date();
   const dayEvents=events.filter(e=>new Date(e.starts_at).toDateString()===today.toDateString());
   return <div className="page">
-    <div className="pageTitleRow"><div><span className="eyebrow">Terminplanung</span><h1>Kalender</h1><p>Probefahrten, Auslieferungen und Verkaufsaufgaben mit Kundenkontext.</p></div><div className="segmented"><button className={!week?'active':''} onClick={()=>setWeek(false)}>Tag</button><button className={week?'active':''} onClick={()=>setWeek(true)}>Woche</button></div></div>
+    <div className="pageTitleRow"><div><span className="eyebrow">Terminplanung</span><h1>Kalender</h1><p>Probefahrten, Auslieferungen und persönliche Termine an einem Ort.</p></div><div className="calendarTopActions"><button className="btn primary" onClick={onNewEvent}>+ Termin</button><div className="segmented"><button className={!week?'active':''} onClick={()=>setWeek(false)}>Tag</button><button className={week?'active':''} onClick={()=>setWeek(true)}>Woche</button></div></div></div>
     {!week?<DayCalendar events={dayEvents} customerMap={customerMap} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus} onReschedule={onReschedule} onCompleteTestDrive={onCompleteTestDrive}/>:<WeekCalendar events={events} customerMap={customerMap} onOpenCustomer={onOpenCustomer} onSetStatus={onSetStatus}/>}
   </div>;
 }
@@ -864,6 +920,7 @@ function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
         <button onClick={()=>setText('Probefahrt mit Rafael Huber morgen um 15 Uhr')}>Probefahrt planen</button>
         <button onClick={()=>setText('Rafael Huber nicht erreicht')}>Nicht erreicht</button>
         <button onClick={()=>setText('Notiz bei Rafael Huber: Kunde möchte am Freitag entscheiden')}>Notiz speichern</button>
+        <button onClick={()=>setText('Termin morgen um 10 Uhr: Teammeeting')}>Termin anlegen</button>
         <button onClick={()=>setText('To-do für heute: CX-5 auf den Hof stellen')}>To-do speichern</button>
         <button onClick={()=>setText('Max Mustermann hat gekauft, Kundennummer 47182, gekauftes Fahrzeug CX-5')}>Kaufabschluss</button>
         <button onClick={()=>setText('Öffne Rafael Huber')}>Kundenakte öffnen</button>

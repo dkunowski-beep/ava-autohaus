@@ -165,3 +165,7 @@ input::placeholder,textarea::placeholder{color:#52657b!important}
 .dangerZone{border:1px solid #54222a;background:#170a0e;border-radius:14px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px}.dangerZone b,.dangerZone span{display:block}.dangerZone b{font-size:10px;color:#ff9299!important}.dangerZone span{font-size:8px;color:#9d7378!important;margin-top:3px}.dangerZone button{border:1px solid #73313a;background:#2a0d13;color:#ff9aa1;border-radius:9px;padding:8px 10px;font-size:9px;font-weight:850}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#03070d}::-webkit-scrollbar-thumb{background:#15304b;border-radius:10px}
 @media(max-width:760px){.workspace{background:radial-gradient(circle at 80% 0%,rgba(15,112,238,.11),transparent 25%),#03070d!important}.topbar{background:rgba(3,8,14,.9)!important}.dangerZone{align-items:flex-start;flex-direction:column}}
+
+/* AVA 1.1.1 Calendar */
+.calendarTopActions{display:flex;gap:10px;align-items:center}.compactModal{width:min(650px,100%)}.compactModal textarea{min-height:72px}
+@media(max-width:760px){.pageTitleRow .calendarTopActions{display:flex;margin-top:14px;justify-content:space-between}.calendarTopActions>.btn{flex:1}.calendarTopActions .segmented{flex:0 0 auto}}
