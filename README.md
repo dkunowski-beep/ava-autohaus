@@ -1,20 +1,10 @@
-# AVA 1.4.9 – Heute neu strukturiert
+# AVA 1.4.10 – Kontaktquelle
 
-Die Heute-Seite ist jetzt ein Arbeitsbildschirm statt KPI-Dashboard.
+Neu:
+- Beim Anlegen und Bearbeiten von Kunden/Interessenten: Kontaktquelle.
+- Auswahl: Showroom-Besuch, Online-Anfrage, Telefonanruf, Empfehlung, E-Mail, Hersteller-Lead, Bestandskunde, Veranstaltung/Event, Social Media, Sonstiges.
+- Kontaktquelle wird auf der Kundenkarte und in der Kundenakte angezeigt.
+- Grundlage für spätere Sales-Intelligence-Auswertungen nach Leadquelle.
 
-Reihenfolge:
-1. AVA Sales Focus – was jetzt am meisten Verkaufswirkung hat
-2. Muss heute passieren – dringende wichtige Punkte
-3. Tagesablauf – heutige Termine chronologisch
-4. AVA Intelligence – intelligente Empfehlungen / vergessene Chancen
-5. Weitere Verkaufschancen im Sales Radar
-6. Operative Aufgaben, To-dos, Team und Vertragschancen
-7. Tagesabschluss
-
-Entfernt:
-- KPI-Kacheln „Offene Aufgaben“
-- „Termine heute“
-- „Meine Kunden“
-- „Vertragschancen“ als reine Zahl ganz oben
-
-Keine neue Supabase-Migration nötig.
+Vor Deployment einmal `supabase/ava_1_4_10_contact_source.sql` im Supabase SQL Editor ausführen.
+Enthält alle Funktionen aus AVA 1.4.9.
