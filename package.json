@@ -1,6 +1,6 @@
 {
-  "name": "ava-alpha-08",
-  "version": "0.8.0",
+  "name": "ava-alpha-081",
+  "version": "0.8.1",
   "private": true,
   "scripts": {
     "dev": "next dev",

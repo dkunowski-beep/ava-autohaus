@@ -60,7 +60,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 0.8</div>
+      <div className="versionPill">Alpha 0.8.1</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -302,19 +302,37 @@ function Dashboard({session}){
   }
 
   function parseNewProspect(text){
-    const q=text.trim();
-    const phone=(q.match(/(?:\+49|0)[\d\s\/-]{7,}/)||[])[0]?.trim()||'';
-    const email=(q.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)||[])[0]||'';
+    const raw=text.trim();
+    const phone=(raw.match(/(?:\+49|0)[\d\s\/-]{7,}/)||[])[0]?.trim()||'';
+    const email=(raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)||[])[0]||'';
+
     let name='';
-    const nm=q.match(/(?:neuer?|neue)\s+(?:interessent(?:in)?|kunde|kundin)\s+([^,]+?)(?=\s+(?:telefon|handy|tel\.?|möchte|moechte|will|interessiert)|,|$)/i);
-    if(nm) name=nm[1].trim();
+    const patterns=[
+      /(?:neuen?|neue)\s+(?:interessenten?|interessentin|kunden?|kundin)\s+(?:anlegen\s+)?(?:mit\s+dem\s+namen\s+|namens\s+)?([^,]+?)(?=\s+(?:telefon|handy|tel\.?|mit\s+der\s+nummer|möchte|moechte|will|interessiert|für|fuer|probefahrt)|,|$)/i,
+      /(?:interessenten?|kunden?)\s+anlegen\s+(?:mit\s+dem\s+namen\s+|namens\s+)?([^,]+?)(?=\s+(?:telefon|handy|tel\.?|möchte|moechte|will|interessiert|für|fuer|probefahrt)|,|$)/i,
+      /(?:name(?:n)?|namens)\s+([A-ZÄÖÜ][\p{L}\-]+(?:\s+[A-ZÄÖÜ][\p{L}\-]+){1,3})/iu
+    ];
+    for(const r of patterns){
+      const m=raw.match(r);
+      if(m){name=m[1].trim();break}
+    }
+
+    // Cleanup common filler endings accidentally captured
+    name=name.replace(/\s+(?:anlegen|erstellen)$/i,'').trim();
+
     let vehicle='';
-    const vm=q.match(/(?:möchte|moechte|will)\s+(?:einen?|eine)?\s*([^,.]+?)\s+(?:probe\s*fahren|probefahren|zur probefahrt)/i)
-      || q.match(/(?:interesse(?: an)?|interessiert sich für|interessiert sich fuer)\s+(?:einen?|eine)?\s*([^,.]+)/i);
-    if(vm) vehicle=vm[1].trim();
+    const vehiclePatterns=[
+      /(?:möchte|moechte|will)\s+(?:einen?|eine)?\s*([^,.]+?)\s+(?:probe\s*fahren|probefahren|zur probefahrt)/i,
+      /(?:interesse(?: an)?|interessiert sich für|interessiert sich fuer)\s+(?:einen?|eine)?\s*([^,.]+)/i,
+      /(?:fahrzeug|auto)\s+(?:ist|wäre|waere)?\s*([^,.]+)/i
+    ];
+    for(const r of vehiclePatterns){
+      const m=raw.match(r);
+      if(m){vehicle=m[1].trim();break}
+    }
+
     return {name,phone,email,vehicle};
   }
-
 
   async function runVoiceCommand(){
     const text=voiceText.trim();
@@ -322,7 +340,19 @@ function Dashboard({session}){
     const q=text.toLowerCase();
     const c=findCustomerInSpeech(text);
 
-    if((q.includes('neuer interessent')||q.includes('neue interessentin')||q.includes('neuer kunde')||q.includes('neue kundin'))){
+    if(
+      q.includes('neuer interessent')||
+      q.includes('neue interessentin')||
+      q.includes('neuen interessenten')||
+      q.includes('neue interessentin anlegen')||
+      q.includes('interessenten anlegen')||
+      q.includes('interessent anlegen')||
+      q.includes('neuer kunde')||
+      q.includes('neue kundin')||
+      q.includes('neuen kunden')||
+      q.includes('kundin anlegen')||
+      q.includes('kunden anlegen')
+    ){
       const parsed=parseNewProspect(text);
       if(!parsed.name){setVoiceResult('Den Namen konnte ich nicht eindeutig erkennen. Beispiel: „Neuer Interessent Thomas Berger, möchte einen CX-5 probefahren, Freitag um 14 Uhr.“');return}
       const duplicate=customers.find(x=>(parsed.phone&&x.phone===parsed.phone)||(parsed.email&&x.email?.toLowerCase()===parsed.email.toLowerCase())||(x.name||'').toLowerCase()===parsed.name.toLowerCase());
@@ -335,8 +365,8 @@ function Dashboard({session}){
       if(error){setVoiceResult(error.message.includes('TERMIN_CONFLICT')?'Terminüberschneidung erkannt. Der Interessent wurde nicht angelegt. Bitte nenne einen anderen Zeitpunkt.':error.message)}
       else{
         setVoiceResult(when
-          ?`${parsed.name} wurde als Interessent angelegt. Probefahrt: ${when.toLocaleString('de-DE')}. Erinnerungen und Nachkontakt sind geplant.`
-          :`${parsed.name} wurde als Interessent angelegt.`);
+          ?`✓ ${parsed.name} wurde als Interessent angelegt. Probefahrt: ${when.toLocaleString('de-DE')}. Erinnerungen und Nachkontakt sind geplant.`
+          :`✓ ${parsed.name} wurde als Interessent angelegt. Eine Kundennummer ist noch nicht nötig.`);
         await load();
       }
       return;
@@ -629,6 +659,7 @@ function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
       <div className="voiceStatus">{listening?'Ich höre zu…':'Mikrofon antippen oder Befehl eintippen'}</div>
       <textarea className="voiceInput" value={text} onChange={e=>setText(e.target.value)} placeholder='z. B. „Probefahrt mit Rafael Huber morgen um 15 Uhr“'/>
       <div className="voiceExamples">
+        <button onClick={()=>setText('Neuen Interessenten anlegen mit dem Namen Max Mustermann')}>Interessent anlegen</button>
         <button onClick={()=>setText('Neuer Interessent Thomas Berger, Telefon 0176 12345678, möchte einen CX-5 probefahren, Freitag um 14 Uhr')}>Interessent + Probefahrt</button>
         <button onClick={()=>setText('Probefahrt mit Rafael Huber morgen um 15 Uhr')}>Probefahrt planen</button>
         <button onClick={()=>setText('Rafael Huber nicht erreicht')}>Nicht erreicht</button>
