@@ -61,7 +61,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.3.5.5.4.3.2</div>
+      <div className="versionPill">Alpha 1.3.6.5.4.3.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -1260,11 +1260,13 @@ function CustomerForm({selected,form,setForm,onClose,onSubmit}){
 }
 
 function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
+  const hasText=Boolean((text||'').trim());
   return <div className="modalBackdrop voiceBackdrop">
     <div className="voiceModal">
-      <div className="modalHead"><div><span className="eyebrow">AVA Sprachassistent</span><h2>Was soll AVA erledigen?</h2><p>Sprich natürlich. Vor Aktionen prüft AVA Kunde, Termin und vorhandene Daten.</p></div><button className="closeButton" onClick={onClose}>×</button></div>
+      <div className="modalHead"><div><span className="eyebrow">AVA Sprachassistent</span><h2>Was soll AVA erledigen?</h2><p>Einsprechen, prüfen und anschließend bewusst in AVA übernehmen.</p></div><button className="closeButton" onClick={onClose}>×</button></div>
       <div className={`voiceOrb ${listening?'listening':''}`} onClick={onListen}>🎙</div>
-      <div className="voiceStatus">{listening?'Ich höre zu…':'Mikrofon antippen oder Befehl eintippen'}</div>
+      <div className="voiceStatus">{listening?'Ich höre zu…':hasText?'Sprache erkannt – jetzt prüfen und übernehmen':'Mikrofon antippen oder Befehl eintippen'}</div>
+      {hasText&&<div className="voiceRecognized"><span>Erkannt</span><b>„{text}“</b></div>}
       <textarea className="voiceInput" value={text} onChange={e=>setText(e.target.value)} placeholder='z. B. „Probefahrt mit Rafael Huber morgen um 15 Uhr“'/>
       <div className="voiceExamples">
         <button onClick={()=>setText('Neuen Interessenten anlegen mit dem Namen Max Mustermann')}>Interessent anlegen</button>
@@ -1278,7 +1280,13 @@ function VoiceAssistant({text,setText,result,listening,onListen,onRun,onClose}){
         <button onClick={()=>setText('Öffne Rafael Huber')}>Kundenakte öffnen</button>
       </div>
       {result&&<div className="voiceResult">{result}</div>}
-      <div className="modalFoot voiceFoot"><span>AVA 0.8 verarbeitet ausgewählte Verkaufskommandos – keine Nachricht wird automatisch versendet.</span><div><button className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary" onClick={onRun}>Befehl ausführen</button></div></div>
+      <div className="modalFoot voiceFoot voiceActionBar">
+        <span>AVA speichert erst, wenn du bestätigst.</span>
+        <div>
+          <button className="btn ghost" onClick={()=>{setText('');}}>Verwerfen</button>
+          <button className="btn primary voiceApply" disabled={!hasText||listening} onClick={onRun}>✓ In AVA übernehmen</button>
+        </div>
+      </div>
     </div>
   </div>;
 }

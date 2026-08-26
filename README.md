@@ -1,7 +1,12 @@
-# AVA 1.3.5 — Real Push VAPID Fix
+# AVA 1.3.6 — Urgent Voice Confirmation Fix
 
-- Frontend public VAPID key synchronized with the newly generated web-push key pair.
-- Private VAPID key remains only in Supabase Secrets.
-- Existing real push workflow remains unchanged.
+Restores a clear action after speech recognition.
 
-After deployment, Anton's iPhone must create a NEW push subscription because the application server key changed.
+Voice flow:
+1. Speak command.
+2. AVA shows “Erkannt” with the recognized sentence.
+3. User chooses “✓ In AVA übernehmen” or “Verwerfen”.
+4. Nothing is saved automatically before confirmation.
+
+The confirmation bar is sticky on mobile so it remains visible on iPhone even with longer voice content.
+All existing voice commands continue to use the existing `runVoiceCommand` logic.
