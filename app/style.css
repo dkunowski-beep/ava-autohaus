@@ -243,3 +243,21 @@ input::placeholder,textarea::placeholder{color:#52657b!important}
 .dangerBtn{background:#251017!important;border:1px solid #7a283b!important;color:#ff879d!important}
 .dangerBtn:hover{background:#35131e!important;border-color:#b83c57!important}
 @media(max-width:760px){.calendarEditFoot{display:grid!important;grid-template-columns:1fr!important}.calendarEditFoot>div{display:grid!important;grid-template-columns:1fr 1fr;gap:8px}.calendarEditFoot>div:first-child{grid-template-columns:1fr}.calendarEditFoot .btn{width:100%}}
+
+/* AVA 1.4.3 Team Chats */
+.teamChatShell{display:grid;grid-template-columns:300px minmax(0,1fr);gap:14px;min-height:560px}
+.conversationList,.threadPanel{background:linear-gradient(145deg,#091725,#06101b);border:1px solid #14304b;border-radius:18px;box-shadow:0 15px 40px rgba(0,0,0,.16)}
+.conversationList{padding:14px;overflow:hidden}
+.conversationRow{width:100%;display:flex;gap:10px;align-items:flex-start;text-align:left;padding:11px;border:1px solid transparent;background:transparent;border-radius:14px;color:#eaf4ff;margin-bottom:6px}
+.conversationRow:hover,.conversationRow.active{background:#0a1d30;border-color:#194b76}
+.conversationMeta{min-width:0;flex:1}.conversationMeta>div{display:flex;align-items:center;gap:7px}.conversationMeta b{font-size:10px}.conversationMeta small{display:block;font-size:8px;color:#65809b;margin-top:2px}.conversationMeta p{font-size:8px;color:#8095aa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:5px 0 0}
+.unreadPill{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#1683ff;color:white;display:grid;place-items:center;font-size:8px;font-weight:900}
+.threadPanel{display:flex;flex-direction:column;min-height:560px;overflow:hidden}
+.threadHead{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #14304b}.threadHead h2{margin:0;font-size:14px}.threadHead span{font-size:8px;color:#6e859c}.chatAvatar.large{width:38px;height:38px;flex-basis:38px}
+.threadMessages{flex:1;padding:16px;overflow:auto;display:flex;flex-direction:column;gap:9px}
+.threadMessage{display:flex}.threadMessage.outgoing{justify-content:flex-end}.messageBubble{max-width:min(72%,560px);padding:10px 12px;border:1px solid #173a59;background:#081827;border-radius:15px}.threadMessage.outgoing .messageBubble{background:#0a2a4b;border-color:#1b5b91}.threadMessage.unread .messageBubble{box-shadow:0 0 0 1px #1683ff}
+.messageTop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:5px}.messageTop span{font-size:7px;color:#71889e}.messageTop em{font-style:normal;font-size:7px;color:#72bcff;text-transform:uppercase;font-weight:900}.messageBubble>b{display:block;font-size:10px;line-height:1.45}.messageBubble>small{display:block;margin-top:5px;font-size:7px;color:#75b9f0}
+.messageActions{display:flex;gap:10px;margin-top:8px}.messageActions button{background:none;border:0;padding:0;color:#72b9f2;font-size:7px;font-weight:800}.messageActions .deleteMsg{color:#ff8193}
+.teamReplyBox{border-top:1px solid #14304b;padding:12px;background:#071421}.teamReplyInput{width:100%;min-height:72px;max-height:150px;resize:vertical}.teamReplyActions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px}.teamTaskSwitch.compact{margin:0;flex:1;max-width:310px}
+@media(max-width:850px){.teamChatShell{grid-template-columns:230px minmax(0,1fr)}}
+@media(max-width:760px){.teamChatShell{grid-template-columns:1fr;min-height:0}.conversationList{max-height:210px;overflow:auto}.threadPanel{min-height:520px}.messageBubble{max-width:88%}.teamReplyActions{align-items:stretch;flex-direction:column}.teamTaskSwitch.compact{max-width:none;width:100%}.teamReplyActions .btn{width:100%}}

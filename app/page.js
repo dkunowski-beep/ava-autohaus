@@ -61,7 +61,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.4.2.5.4.3.2</div>
+      <div className="versionPill">Alpha 1.4.3.5.4.3.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -601,6 +601,14 @@ function Dashboard({session}){
     await load();
   }
 
+  async function hideTeamMessage(message){
+    if(!message?.id)return;
+    if(!window.confirm('Diese Nachricht nur aus deiner Ansicht löschen? Beim anderen Teammitglied bleibt sie erhalten.'))return;
+    const {error}=await supabase.rpc('ava_hide_team_message',{p_message_id:message.id});
+    if(error){alert('Nachricht konnte nicht gelöscht werden: '+error.message);return}
+    await load();
+  }
+
   async function completeAssignedTodo(todo){
     const assigner=todo.assigned_by;
     const {error}=await supabase.rpc('ava_complete_assigned_todo',{p_todo_id:todo.id});
@@ -922,7 +930,7 @@ function Dashboard({session}){
       {busy?<LoadingState/>:<>
         {tab==='Heute'&&<TodayView openTasks={importantTasks} todayEvents={todayEvents} customers={customers} contractAlerts={contractAlerts} customerMap={customerMap} todos={todos} teamMembers={teamMembers} uid={uid} onCompleteAssigned={completeAssignedTodo} smartRecommendations={smartRecommendations} dayCloseSummary={dayCloseSummary} onAddTodo={addTodo} onToggleTodo={toggleTodo} onDeleteTodo={deleteTodo} onReached={taskReached} onNotReached={taskNotReached} onDone={reopenOrDone} onOpenCustomer={setDetail} onQuick={quickWorkflow}/>}
         {tab==='Kunden'&&<CustomersView customers={filteredCustomers} search={search} setSearch={setSearch} onOpen={setDetail} onEdit={edit} onMail={openMail} onNew={fresh}/>}
-        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} calendarMode={calendarMode} setCalendarMode={setCalendarMode} calendarDate={calendarDate} setCalendarDate={setCalendarDate} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive} onNewEvent={(date)=>{setEditingEvent(null);if(date)setCalendarDate(date);setCalendarFormOpen(true)}} onEditEvent={(e)=>{setEditingEvent(e);setCalendarFormOpen(true)}} onDeleteEvent={deleteCalendarEvent}/>}        {tab==='Team'&&<TeamView uid={uid} members={teamMembers} messages={teamMessages} todos={todos} recipient={teamRecipient} setRecipient={setTeamRecipient} text={teamText} setText={setTeamText} asTask={teamAsTask} setAsTask={setTeamAsTask} onSend={sendTeamMessage} onRead={markTeamMessageRead} onCompleteTodo={completeAssignedTodo}/>}
+        {tab==='Kalender'&&<CalendarView events={events} customerMap={customerMap} calendarMode={calendarMode} setCalendarMode={setCalendarMode} calendarDate={calendarDate} setCalendarDate={setCalendarDate} onOpenCustomer={setDetail} onSetStatus={setEventStatus} onReschedule={rescheduleTestDrive} onCompleteTestDrive={completeTestDrive} onNewEvent={(date)=>{setEditingEvent(null);if(date)setCalendarDate(date);setCalendarFormOpen(true)}} onEditEvent={(e)=>{setEditingEvent(e);setCalendarFormOpen(true)}} onDeleteEvent={deleteCalendarEvent}/>}        {tab==='Team'&&<TeamView uid={uid} members={teamMembers} messages={teamMessages} todos={todos} recipient={teamRecipient} setRecipient={setTeamRecipient} text={teamText} setText={setTeamText} asTask={teamAsTask} setAsTask={setTeamAsTask} onSend={sendTeamMessage} onRead={markTeamMessageRead} onDeleteMessage={hideTeamMessage} onCompleteTodo={completeAssignedTodo}/>}
       </>}
     </main>
     <MobileNav tab={tab} setTab={setTab}/>
@@ -1333,34 +1341,79 @@ function VoiceAssistant({text,setText,result,listening,running,onListen,onRun,on
   </div>;
 }
 
-function TeamView({uid,members=[],messages=[],todos=[],recipient,setRecipient,text,setText,asTask,setAsTask,onSend,onRead,onCompleteTodo}){
+function TeamView({uid,members=[],messages=[],todos=[],recipient,setRecipient,text,setText,asTask,setAsTask,onSend,onRead,onDeleteMessage,onCompleteTodo}){
   const me=members.find(m=>m.user_id===uid);
   const others=members.filter(m=>m.user_id!==uid);
   const member=id=>members.find(m=>m.user_id===id);
+  const visibleMessages=messages.filter(m=>{
+    if(m.sender_id===uid&&m.deleted_by_sender_at)return false;
+    if(m.recipient_id===uid&&m.deleted_by_recipient_at)return false;
+    return true;
+  });
   const assigned=todos.filter(t=>t.user_id===uid&&t.assigned_by&&t.status!=='done');
+
+  const partners=others.map(o=>{
+    const thread=visibleMessages.filter(m=>(m.sender_id===uid&&m.recipient_id===o.user_id)||(m.sender_id===o.user_id&&m.recipient_id===uid));
+    const latest=[...thread].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]||null;
+    const unread=thread.filter(m=>m.recipient_id===uid&&!m.read_at).length;
+    return {...o,thread,latest,unread};
+  }).sort((a,b)=>new Date(b.latest?.created_at||0)-new Date(a.latest?.created_at||0));
+
+  const activeId=recipient||partners[0]?.user_id||'';
+  const active=partners.find(p=>p.user_id===activeId)||partners[0]||null;
+  const thread=(active?.thread||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+
+  function selectPartner(id){
+    setRecipient(id);
+    const unread=visibleMessages.filter(m=>m.sender_id===id&&m.recipient_id===uid&&!m.read_at);
+    unread.forEach(m=>onRead(m));
+  }
+
+  function replyTo(m){
+    const otherId=m.sender_id===uid?m.recipient_id:m.sender_id;
+    setRecipient(otherId);
+    const otherName=member(otherId)?.display_name||'Kollege';
+    setText('');
+    setTimeout(()=>{
+      const el=document.querySelector('.teamReplyInput');
+      if(el)el.focus();
+    },50);
+  }
+
   return <div className="page teamPage">
-    <div className="pageTitleRow"><div><span className="eyebrow">AVA Team Assistant</span><h1>Team</h1><p>Kurze Nachrichten, Aufgaben und Übergaben ohne WhatsApp-Chaos.</p></div></div>
-    <div className="teamLayout">
-      <section className="teamComposer">
-        <div className="sectionTitle"><h2>Nachricht senden</h2><span>{me?.display_name||'Mein Team'}</span></div>
-        <label className="teamLabel">An</label>
-        <select value={recipient} onChange={e=>setRecipient(e.target.value)}><option value="">Kollegen auswählen…</option>{others.map(m=><option value={m.user_id} key={m.user_id}>{m.display_name}{m.role?` · ${m.role}`:''}</option>)}</select>
-        <label className="teamLabel">Nachricht</label>
-        <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="z. B. Bitte stell den CX-5 für 14 Uhr bereit."/>
-        <label className="teamTaskSwitch"><input type="checkbox" checked={asTask} onChange={e=>setAsTask(e.target.checked)}/><span><b>Als Aufgabe senden</b><small>Der Empfänger bekommt sie zusätzlich unter „Meine To-dos“.</small></span></label>
-        <button className="btn primary wide" onClick={onSend}>{asTask?'Aufgabe senden':'Nachricht senden'}</button>
-      </section>
-      <section className="teamInbox">
-        <div className="sectionTitle"><h2>Nachrichten</h2><span>{messages.filter(m=>m.recipient_id===uid&&!m.read_at).length} neu</span></div>
-        <div className="chatList">{messages.length?messages.map(m=>{
-          const incoming=m.recipient_id===uid, other=member(incoming?m.sender_id:m.recipient_id);
-          return <button key={m.id} className={`chatBubble ${incoming?'incoming':'outgoing'} ${incoming&&!m.read_at?'unread':''}`} onClick={()=>onRead(m)}>
-            <div className="chatAvatar">{(other?.display_name||'?').slice(0,1).toUpperCase()}</div>
-            <div><span>{incoming?'Von':'An'} {other?.display_name||'Kollege'} · {fmtDateTime(m.created_at)}</span><b>{m.body}</b>{m.message_type==='task'&&<small>Aufgabe{m.due_at?` · fällig ${fmtDateTime(m.due_at)}`:''}</small>}</div>
-          </button>
-        }):<EmptyState title="Noch keine Nachrichten" text="Schreib einem Kollegen die erste AVA-Team-Nachricht."/>}</div>
+    <div className="pageTitleRow"><div><span className="eyebrow">AVA Team Assistant</span><h1>Team</h1><p>Interne Chats, Aufgaben und Übergaben – direkt im Autohaus.</p></div></div>
+
+    <div className="teamChatShell">
+      <aside className="conversationList">
+        <div className="sectionTitle"><h2>Chats</h2><span>{visibleMessages.filter(m=>m.recipient_id===uid&&!m.read_at).length} neu</span></div>
+        {partners.length?partners.map(p=><button key={p.user_id} className={`conversationRow ${active?.user_id===p.user_id?'active':''}`} onClick={()=>selectPartner(p.user_id)}>
+          <div className="chatAvatar">{(p.display_name||'?').slice(0,1).toUpperCase()}</div>
+          <div className="conversationMeta"><div><b>{p.display_name}</b>{p.unread>0&&<span className="unreadPill">{p.unread}</span>}</div><small>{p.role||'Team'}</small><p>{p.latest?.body||'Noch keine Nachricht'}</p></div>
+        </button>):<EmptyState title="Noch kein Team" text="Lege weitere Teammitglieder an, um interne Chats zu nutzen." compact/>}
+      </aside>
+
+      <section className="threadPanel">
+        {active?<><div className="threadHead"><div className="chatAvatar large">{(active.display_name||'?').slice(0,1).toUpperCase()}</div><div><h2>{active.display_name}</h2><span>{active.role||'Teammitglied'}</span></div></div>
+          <div className="threadMessages">{thread.length?thread.map(m=>{
+            const incoming=m.recipient_id===uid;
+            return <div key={m.id} className={`threadMessage ${incoming?'incoming':'outgoing'} ${incoming&&!m.read_at?'unread':''}`} onClick={()=>onRead(m)}>
+              <div className="messageBubble">
+                <div className="messageTop"><span>{incoming?'Von':'Du'} · {fmtDateTime(m.created_at)}</span>{m.message_type==='task'&&<em>Aufgabe</em>}</div>
+                <b>{m.body}</b>
+                {m.due_at&&<small>Fällig: {fmtDateTime(m.due_at)}</small>}
+                <div className="messageActions"><button type="button" onClick={e=>{e.stopPropagation();replyTo(m)}}>↩ Antworten</button><button type="button" className="deleteMsg" onClick={e=>{e.stopPropagation();onDeleteMessage(m)}}>Löschen</button></div>
+              </div>
+            </div>
+          }):<EmptyState title="Noch keine Nachrichten" text={`Schreib ${active.display_name} die erste Nachricht.`}/>}</div>
+
+          <div className="teamReplyBox">
+            <textarea className="teamReplyInput" value={text} onChange={e=>setText(e.target.value)} placeholder={`Nachricht an ${active.display_name}…`}/>
+            <div className="teamReplyActions"><label className="teamTaskSwitch compact"><input type="checkbox" checked={asTask} onChange={e=>setAsTask(e.target.checked)}/><span><b>Als Aufgabe</b><small>landet zusätzlich bei „Mir zugewiesen“</small></span></label><button className="btn primary" onClick={()=>{setRecipient(active.user_id);onSend()}} disabled={!text.trim()}>{asTask?'Aufgabe senden':'Senden'}</button></div>
+          </div>
+        </>:<EmptyState title="Kein Chat ausgewählt" text="Wähle links ein Teammitglied aus."/>}
       </section>
     </div>
+
     <section className="assignedTasks">
       <div className="sectionTitle"><h2>Mir zugewiesen</h2><span>{assigned.length} offen</span></div>
       <div className="assignedGrid">{assigned.length?assigned.map(t=><div className="assignedCard" key={t.id}><span>Von {member(t.assigned_by)?.display_name||'Kollege'}</span><b>{t.title}</b><small>{t.due_date?`Fällig ${fmtDate(t.due_date)}`:'Ohne Fälligkeit'}</small><button className="btn soft" onClick={()=>onCompleteTodo(t)}>✓ Erledigt</button></div>):<EmptyState title="Alles erledigt" text="Dir ist aktuell keine Team-Aufgabe zugewiesen." compact/>}</div>
