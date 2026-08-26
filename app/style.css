@@ -237,3 +237,9 @@ input::placeholder,textarea::placeholder{color:#52657b!important}
   .refreshBtn{width:38px!important;min-width:38px!important;padding:0!important;display:grid!important;place-items:center!important}
   .refreshBtn span{display:none}
 }
+
+/* AVA 1.4.0 calendar delete */
+.calendarEditFoot{justify-content:space-between!important;gap:12px}
+.dangerBtn{background:#251017!important;border:1px solid #7a283b!important;color:#ff879d!important}
+.dangerBtn:hover{background:#35131e!important;border-color:#b83c57!important}
+@media(max-width:760px){.calendarEditFoot{display:grid!important;grid-template-columns:1fr!important}.calendarEditFoot>div{display:grid!important;grid-template-columns:1fr 1fr;gap:8px}.calendarEditFoot>div:first-child{grid-template-columns:1fr}.calendarEditFoot .btn{width:100%}}

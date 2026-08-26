@@ -1,13 +1,7 @@
-# AVA 1.3.8 — Refresh + Calendar Edit
+# AVA 1.4.0
 
-New:
-- Global “↻ Alles aktualisieren” button in the top bar.
-- Reloads the complete AVA workspace: customers, calendar, todos, team messages and notifications.
-- Compact refresh icon on mobile.
-- Calendar appointments are editable again.
-- Day view: explicit “Termin bearbeiten” button.
-- Week view: tap/click appointment to edit.
-- Month view: tap/click appointment to edit.
-- Edit form supports title, date/time, duration, appointment type, customer assignment and notes.
-
-All AVA 1.3.7 iPhone Voice fixes and 1.3.5 push/VAPID changes remain included.
+- Keeps the 1.3.9 fresh PushSubscription/VAPID fix.
+- Adds a prominent “Termin löschen” button directly inside the appointment edit dialog.
+- Voice-created appointments are written directly to the authenticated user's `ava_events` calendar and reloaded immediately.
+- Voice calendar creation performs an overlap check and shows a clear success/error result.
+- Existing refresh, calendar edit and iPhone voice confirmation fixes remain included.

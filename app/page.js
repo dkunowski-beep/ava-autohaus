@@ -61,7 +61,7 @@ function Login(){
     <div className="authVisual">
       <div className="authBrand"><div className="avaLogoMark authLogo"><span className="logoSlash one"></span><span className="logoSlash two"></span><span className="logoCut"></span></div><div><b>AVA</b><span>Autohaus Vertriebs Assistent</span></div></div>
       <div className="authClaim">Mehr Überblick.<br/>Weniger Nachhalten.<br/>Mehr Zeit für Verkauf.</div>
-      <div className="versionPill">Alpha 1.3.8.5.4.3.2</div>
+      <div className="versionPill">Alpha 1.4.0.5.4.3.2</div>
     </div>
     <div className="authPanel">
       <div className="authCard">
@@ -464,27 +464,41 @@ function Dashboard({session}){
     }
     try{
       const reg=await navigator.serviceWorker.ready;
-      let sub=await reg.pushManager.getSubscription();
-      if(!sub){
-        sub=await reg.pushManager.subscribe({
-          userVisibleOnly:true,
-          applicationServerKey:urlBase64ToUint8Array(AVA_VAPID_PUBLIC_KEY)
-        });
+
+      // Wichtig bei geändertem VAPID-Key:
+      // vorhandenes Abo immer vollständig entfernen und frisch registrieren.
+      const oldSub=await reg.pushManager.getSubscription();
+      if(oldSub){
+        try{await oldSub.unsubscribe()}catch(_e){}
       }
+
+      // Alte Server-Abos dieses Users entfernen, damit nur aktuelle Keys verwendet werden.
+      await supabase.from('ava_push_subscriptions').delete().eq('user_id',uid);
+
+      const sub=await reg.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:urlBase64ToUint8Array(AVA_VAPID_PUBLIC_KEY)
+      });
+
       const j=sub.toJSON();
-      const {error}=await supabase.from('ava_push_subscriptions').upsert({
+      if(!j.endpoint||!j.keys?.p256dh||!j.keys?.auth){
+        throw new Error('Push-Abo wurde vom Gerät nicht vollständig erzeugt.');
+      }
+
+      const {error}=await supabase.from('ava_push_subscriptions').insert({
         user_id:uid,
         endpoint:j.endpoint,
-        p256dh:j.keys?.p256dh,
-        auth:j.keys?.auth,
+        p256dh:j.keys.p256dh,
+        auth:j.keys.auth,
         user_agent:navigator.userAgent,
         updated_at:new Date().toISOString()
-      },{onConflict:'user_id,endpoint'});
+      });
       if(error)throw error;
-      await showSystemNotification('AVA Push ist aktiv','Dieses Gerät kann jetzt echte Team-Pushs empfangen.');
-      alert('Push-Mitteilungen sind auf diesem Gerät aktiviert.');
+
+      await showSystemNotification('AVA Push ist aktiv','Dieses Gerät wurde mit dem aktuellen Push-Schlüssel neu registriert.');
+      alert('Push wurde vollständig neu eingerichtet.');
     }catch(e){
-      alert('Push konnte nicht eingerichtet werden: '+(e?.message||e));
+      alert('Push konnte nicht neu eingerichtet werden: '+(e?.message||e));
     }
   }
 
@@ -762,9 +776,31 @@ function Dashboard({session}){
         .trim();
       if(vc) title=title.replace(new RegExp(`\\bmit\\s+${vc.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`,'i'),'').trim();
       if(!title||title.toLowerCase()==='termin')title=vc?`Termin mit ${vc.name}`:'Persönlicher Termin';
-      const {error}=await supabase.rpc('ava_create_calendar_event',{p_title:title,p_starts_at:when.toISOString(),p_minutes:60,p_customer_id:vc?.id||null,p_event_type:'appointment',p_notes:`Per AVA Voice: ${text}`});
-      if(error)setVoiceResult(error.message.includes('TERMIN_CONFLICT')?'Terminüberschneidung erkannt. Bitte nenne einen anderen Zeitpunkt.':error.message);
-      else{setVoiceResult(`✓ Termin „${title}“ am ${when.toLocaleString('de-DE')} angelegt.`);await load()}
+      const ends=new Date(when.getTime()+60*60000);
+      const {data:clashes,error:clashError}=await supabase.from('ava_events')
+        .select('id,title,starts_at,ends_at')
+        .eq('owner_id',uid)
+        .neq('status','cancelled')
+        .lt('starts_at',ends.toISOString())
+        .gt('ends_at',when.toISOString());
+      if(clashError){setVoiceResult('Kalender konnte nicht geprüft werden: '+clashError.message);return}
+      if(clashes?.length){setVoiceResult(`Terminüberschneidung mit „${clashes[0].title}“. Bitte nenne einen anderen Zeitpunkt.`);return}
+      const {data:created,error}=await supabase.from('ava_events').insert({
+        owner_id:uid,
+        customer_id:vc?.id||null,
+        event_type:'appointment',
+        title,
+        starts_at:when.toISOString(),
+        ends_at:ends.toISOString(),
+        status:'planned',
+        notes:`Per AVA Voice: ${text}`
+      }).select('id').single();
+      if(error)setVoiceResult('Termin konnte nicht gespeichert werden: '+error.message);
+      else{
+        setVoiceResult(`✓ Termin „${title}“ am ${when.toLocaleString('de-DE')} in deinem Kalender angelegt.`);
+        setVoiceText('');
+        await load();
+      }
       return;
     }
 
@@ -1034,7 +1070,7 @@ function CustomerCard({c,onOpen,onEdit,onMail}){
   </article>;
 }
 
-function CalendarEventForm({customers,event,defaultDate,onClose,onSave}){
+function CalendarEventForm({customers,event,defaultDate,onClose,onSave,onDelete}){
   function localValue(v){
     if(!v)return '';
     const d=new Date(v);
@@ -1067,7 +1103,7 @@ function CalendarEventForm({customers,event,defaultDate,onClose,onSave}){
       <Field label="Kunde / Interessent" hint="Optional"><select value={form.customer_id} onChange={e=>set('customer_id',e.target.value)}><option value="">Kein Kunde zugeordnet</option>{customers.map(c=><option key={c.id} value={c.id}>{c.name}{c.customer_number?` · KD ${c.customer_number}`:''}</option>)}</select></Field>
       <Field label="Notiz" full><textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Optional…"/></Field>
     </div></div>
-    <div className="modalFoot"><span>AVA prüft vorhandene Termine vor dem Speichern.</span><div><button type="button" className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary">{event?'Änderungen speichern':'Termin speichern'}</button></div></div>
+    <div className="modalFoot calendarEditFoot"><div>{event&&<button type="button" className="btn dangerBtn" onClick={onDelete}>🗑 Termin löschen</button>}</div><div><button type="button" className="btn ghost" onClick={onClose}>Abbrechen</button><button className="btn primary">{event?'Änderungen speichern':'Termin speichern'}</button></div></div>
   </form></div>;
 }
 
@@ -1335,7 +1371,7 @@ function NotificationCenter({notifications,prefs,onClose,onPermission,onPref}){
   return <div className="drawerBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
     <aside className="drawer notificationDrawer">
       <div className="drawerHead"><div><span className="eyebrow">AVA Notifications</span><h2>Benachrichtigungen</h2><p>AVA meldet sich, wenn wirklich etwas wichtig wird.</p></div><button className="closeButton" onClick={onClose}>×</button></div>
-      <button className="btn primary wide notificationPermission" onClick={onPermission}>Echte Push-Mitteilungen auf diesem Gerät aktivieren</button>
+      <button className="btn primary wide notificationPermission" onClick={onPermission}>Push auf diesem Gerät neu einrichten</button>
       <DetailSection title="Einstellungen">
         <NotificationToggle label="Benachrichtigungen" value={prefs?.enabled!==false} onChange={v=>onPref('enabled',v)}/>
         <NotificationToggle label="Fällige Nachkontakte" value={prefs?.due_followups!==false} onChange={v=>onPref('due_followups',v)}/>
