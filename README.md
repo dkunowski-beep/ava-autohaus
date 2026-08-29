@@ -1,18 +1,17 @@
-# AVA 1.5.0 – Dynamischer Verkaufsprozess
+# AVA 1.5.1 – Automatischer Angebots-Workflow
 
-AVA führt Käufer jetzt Schritt für Schritt durch den Autohaus-Prozess:
+Neu:
+- Manueller Button „Angebot nachfassen“ entfernt.
+- Neuer Button: „📤 Angebot versendet“.
+- Beim Klick speichert AVA den Versandzeitpunkt und setzt den Kunden in die Angebotsphase.
+- Automatisch wird genau EIN Nachkontakt in 2 Tagen angelegt.
+- Doppel-Klicks erzeugen keine doppelten Aufgaben.
+- Bereits vorhandene doppelte Angebots-Follow-ups werden durch die Migration bereinigt.
+- Sales Radar / Sales Focus erkennen jetzt:
+  - Angebot versendet
+  - Nachkontakt geplant
+  - Angebots-Nachkontakt fällig
+- Ist der Kunde bereits Käufer, kann kein Angebotsprozess mehr gestartet werden.
 
-Bestellt → Fahrzeug da → Unterlagen da → Unterschrieben → Zugelassen → Abholung → Ausgeliefert → Nachkontakt
-
-Funktionen:
-- Nach Kauf: Lieferstatus-Aufgabe nach 21 Tagen.
-- „Auto ist geliefert“ beendet offene Lieferstatus-Aufgaben und erstellt „Zulassungsunterlagen anfordern“.
-- „Zulassungsunterlagen sind da“ erstellt die Aufgabe für die Unterschrift.
-- „Zulassungsanträge unterschrieben“ schaltet auf Zulassung läuft.
-- „Fahrzeug ist zugelassen“ erstellt „Abholtermin vereinbaren“.
-- Abholtermin wird über die bestehende Kalender-Synchronisierung direkt im Kalender gespeichert.
-- „Fahrzeug ausgeliefert“ nutzt den bestehenden Delivery-RPC und markiert den Prozess als ausgeliefert.
-- Kundenhistorie protokolliert die Prozessschritte.
-- Alte passive Delivery-Checkliste wurde durch den aktiven Verkaufsprozess ersetzt.
-
-WICHTIG: Vor Deployment einmal `supabase/ava_1_5_0_sales_process.sql` im Supabase SQL Editor ausführen.
+WICHTIG:
+Vor Deployment einmal `supabase/ava_1_5_1_offer_workflow.sql` im Supabase SQL Editor ausführen.

@@ -218,9 +218,18 @@ function Dashboard({session}){
       const reasons=[];
       const ce=(events||[]).filter(e=>e.customer_id===c.id&&e.status!=='cancelled');
       const ct=(tasks||[]).filter(t=>t.customer_id===c.id&&t.status==='open');
+      const offerTask=ct.find(t=>t.type==='offer'||/nachkontakt angebot/i.test(t.title||''));
       const pastTest=ce.filter(e=>e.event_type==='test_drive'&&new Date(e.starts_at).getTime()<now).sort((a,b)=>new Date(b.starts_at)-new Date(a.starts_at))[0];
       if(pastTest){score+=14;reasons.push('Probefahrt erfolgt')}
-      if(c.stage==='offer'){reasons.push('Angebot offen')}
+      if(c.offer_sent_at||c.stage==='offer'){
+        score+=10;
+        reasons.push('Angebot versendet');
+      }
+      if(offerTask){
+        const offerDue=new Date(offerTask.due_at).getTime();
+        if(offerDue<=now){score+=12;reasons.push('Angebot nachfassen fällig')}
+        else reasons.push('Nachkontakt geplant');
+      }
       if(c.waiting_on_customer){score-=7;reasons.push('wartet auf Kunde')}
       if(ct.some(t=>new Date(t.due_at).getTime()<now)){score+=8;reasons.push('Nachkontakt fällig')}
       if(!ct.length&&!ce.some(e=>new Date(e.starts_at).getTime()>now)){score+=5;reasons.push('kein nächster Schritt')}
@@ -231,7 +240,11 @@ function Dashboard({session}){
       score=Math.max(5,Math.min(95,score));
       let action='Kontakt aufnehmen und Bedarf konkretisieren';
       if(pastTest)action='Probefahrt nachfassen und Kaufentscheidung abholen';
-      if(c.stage==='offer')action='Angebot aktiv nachfassen und offenen Einwand klären';
+      if(c.offer_sent_at||c.stage==='offer'){
+        if(offerTask&&new Date(offerTask.due_at).getTime()<=now) action='Angebot jetzt nachfassen und offenen Einwand klären';
+        else if(offerTask) action=`Angebots-Nachkontakt ist für ${new Date(offerTask.due_at).toLocaleDateString('de-DE')} geplant`;
+        else action='Angebotsprozess prüfen';
+      }
       if(c.waiting_on_customer)action='Kurzen, unverbindlichen Follow-up senden';
       return {customer:c,score,reasons:reasons.slice(0,3),action};
     }).sort((a,b)=>b.score-a.score).slice(0,3);
@@ -407,9 +420,24 @@ function Dashboard({session}){
     closeForm(); await load();
   }
 
+  async function markOfferSent(customer){
+    if(!customer?.id)return;
+    const existing=tasks.find(t=>t.customer_id===customer.id&&t.status==='open'&&(t.type==='offer'||/nachkontakt angebot/i.test(t.title||'')));
+    if(existing){
+      const due=new Date(existing.due_at);
+      alert(`Für ${customer.name} ist bereits ein Angebots-Nachkontakt geplant${Number.isNaN(due.getTime())?'':` · ${due.toLocaleString('de-DE')}`}.`);
+      return;
+    }
+    if(!window.confirm(`Angebot an ${customer.name} als versendet markieren?\n\nAVA plant automatisch genau einen Nachkontakt in 2 Tagen.`))return;
+    const {error}=await supabase.rpc('ava_mark_offer_sent',{p_customer_id:customer.id});
+    if(error){alert('Angebot konnte nicht als versendet gespeichert werden: '+error.message);return}
+    alert(`Angebot versendet ✓\nAVA erinnert dich in 2 Tagen automatisch an ${customer.name}.`);
+    await load();
+  }
+
   async function quickWorkflow(c,type){
     let due=new Date(),title='',details=[c.name,c.customer_number?`KD ${c.customer_number}`:'',c.vehicle_interest].filter(Boolean).join(' · ');
-    if(type==='offer'){due.setDate(due.getDate()+2);title='Nachkontakt Angebot'}
+    if(type==='offer'){await markOfferSent(c);return}
     if(type==='test_drive'){due.setDate(due.getDate()+2);title='Nachkontakt Probefahrt'}
     if(type==='delivery'){due.setDate(due.getDate()+1);title='Nachkontakt Auslieferung'}
     if(type==='delivery_update'){due.setDate(due.getDate()+21);title='Lieferstatus prüfen & Kunden informieren'}
@@ -1135,7 +1163,7 @@ function Dashboard({session}){
     </main>
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
-    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onHandover={c=>setHandoverCustomer(c)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onAdvanceProcess={advanceSalesProcess} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
+    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onHandover={c=>setHandoverCustomer(c)} onOfferSent={markOfferSent} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onAdvanceProcess={advanceSalesProcess} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
     {coachCustomer&&<SalesCoachModal customer={coachCustomer} history={history.filter(h=>h.customer_id===coachCustomer.id)} events={events.filter(e=>e.customer_id===coachCustomer.id)} onClose={()=>setCoachCustomer(null)}/>} 
     {handoverCustomer&&<HandoverCustomerModal customer={handoverCustomer} uid={uid} members={teamMembers} onClose={()=>setHandoverCustomer(null)} onHandover={handoverCustomerTo}/>} 
     {notificationOpen&&<NotificationCenter notifications={notifications} prefs={notificationPrefs} onClose={()=>{setNotificationOpen(false);markNotificationsRead()}} onPermission={requestNotificationPermission} onPref={updateNotificationPref}/>} 
@@ -1549,7 +1577,7 @@ function HandoverCustomerModal({customer,uid,members,onClose,onHandover}){
   </form></div>;
 }
 
-function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,onMail,onHandover,onQuick,onUpload,onOpenDocument,onPurchase,onAdvanceProcess,onDeliveryStart,onDeliveryComplete,onWait,onDelete}){
+function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,onMail,onHandover,onOfferSent,onQuick,onUpload,onOpenDocument,onPurchase,onAdvanceProcess,onDeliveryStart,onDeliveryComplete,onWait,onDelete}){
   const stage=STAGES[customer.stage]||STAGES.lead;
   return <div className="drawerBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
     <aside className="drawer">
@@ -1572,7 +1600,7 @@ function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,
         <OfferDocuments customer={customer} documents={documents} onUpload={onUpload} onOpenDocument={onOpenDocument}/>
       </DetailSection>
       <DetailSection title="Nächste Aktionen">
-        <div className="quickGrid"><button onClick={()=>onQuick('offer')}>Angebot nachfassen</button><button onClick={()=>onQuick('test_drive')}>Probefahrt nachfassen</button><button onClick={()=>onQuick('delivery')}>Auslieferung nachfassen</button><button onClick={()=>onQuick('delivery_update')}>Lieferstatus</button></div>
+        <div className="quickGrid"><button className="offerSentAction" onClick={()=>onOfferSent(customer)}>📤 Angebot versendet</button><button onClick={()=>onQuick('test_drive')}>Probefahrt nachfassen</button><button onClick={()=>onQuick('delivery')}>Auslieferung nachfassen</button><button onClick={()=>onQuick('delivery_update')}>Lieferstatus</button></div>
       </DetailSection>
       <DetailSection title="Offene Aufgaben">
         {tasks.filter(t=>t.status==='open').length?tasks.filter(t=>t.status==='open').map(t=><div className="miniTask" key={t.id}><b>{t.title}</b><span>{fmtDateTime(t.due_at)}</span></div>):<span className="muted">Keine offenen Aufgaben</span>}
