@@ -127,6 +127,7 @@ function Dashboard({session}){
   const [form,setForm]=useState(emptyForm);
   const [handoverCustomer,setHandoverCustomer]=useState(null);
   const [coachCustomer,setCoachCustomer]=useState(null);
+  const [deliveryPlannerCustomer,setDeliveryPlannerCustomer]=useState(null);
 
   async function load(){
     setBusy(true);
@@ -512,17 +513,17 @@ function Dashboard({session}){
     await load();
   }
 
-  async function startDeliveryAssistant(customer){
-    const dt=window.prompt('Geplante Auslieferung (YYYY-MM-DD HH:MM):');
-    if(!dt)return;
-    const parsed=new Date(dt.replace(' ','T'));
+  async function startDeliveryAssistant(customer,deliveryAt){
+    if(!deliveryAt){setDeliveryPlannerCustomer(customer);return}
+    const parsed=new Date(deliveryAt);
     if(Number.isNaN(parsed.getTime())){alert('Datum konnte nicht erkannt werden.');return}
     const {error}=await supabase.rpc('ava_start_delivery_assistant',{p_customer_id:customer.id,p_delivery_at:parsed.toISOString()});
     if(error){alert(error.message);return}
     const sync=await syncDeliveryCalendarEvent(customer,parsed.toISOString());
     if(!sync.ok)alert('Auslieferung wurde gespeichert, aber der Kalendertermin konnte nicht angelegt werden: '+sync.error);
-    await supabase.from('ava_customers').update({sales_process_step:'delivery_scheduled'}).eq('id',customer.id).eq('owner_id',uid);
-    await supabase.from('ava_history').insert({customer_id:customer.id,actor_id:uid,action:'Abholtermin vereinbart',details:parsed.toLocaleString('de-DE')});
+    await supabase.from('ava_customers').update({sales_process_step:'delivery_scheduled',planned_delivery_at:parsed.toISOString()}).eq('id',customer.id).eq('owner_id',uid);
+    await supabase.from('ava_history').insert({customer_id:customer.id,actor_id:uid,action:'Abholtermin vereinbart',details:parsed.toLocaleString('de-DE',{dateStyle:'medium',timeStyle:'short'})});
+    setDeliveryPlannerCustomer(null);
     await load();
   }
 
@@ -1174,6 +1175,7 @@ function Dashboard({session}){
     {coachCustomer&&<SalesCoachModal customer={coachCustomer} history={history.filter(h=>h.customer_id===coachCustomer.id)} events={events.filter(e=>e.customer_id===coachCustomer.id)} onClose={()=>setCoachCustomer(null)}/>} 
     {handoverCustomer&&<HandoverCustomerModal customer={handoverCustomer} uid={uid} members={teamMembers} onClose={()=>setHandoverCustomer(null)} onHandover={handoverCustomerTo}/>} 
     {notificationOpen&&<NotificationCenter notifications={notifications} prefs={notificationPrefs} onClose={()=>{setNotificationOpen(false);markNotificationsRead()}} onPermission={requestNotificationPermission} onPref={updateNotificationPref}/>} 
+    {deliveryPlannerCustomer&&<DeliveryPlannerModal customer={deliveryPlannerCustomer} onClose={()=>setDeliveryPlannerCustomer(null)} onSave={(iso)=>startDeliveryAssistant(deliveryPlannerCustomer,iso)}/>}
     {calendarFormOpen&&<CalendarEventForm customers={customers} event={editingEvent} defaultDate={calendarDate} onClose={()=>{setCalendarFormOpen(false);setEditingEvent(null)}} onSave={createManualEvent} onDelete={async()=>{if(!editingEvent)return;const ok=await deleteCalendarEvent(editingEvent);if(ok){setCalendarFormOpen(false);setEditingEvent(null)}}}/>}
     {voiceOpen&&<VoiceAssistant text={voiceText} setText={setVoiceText} result={voiceResult} listening={voiceListening} running={voiceRunning} onListen={startVoice} onRun={async()=>{if(voiceRunning)return;setVoiceRunning(true);setVoiceResult('AVA übernimmt den Befehl…');try{await runVoiceCommand()}catch(e){setVoiceResult('Fehler beim Übernehmen: '+(e?.message||e))}finally{setVoiceRunning(false)}}} onClose={()=>{stopVoice();setVoiceOpen(false)}}/>}
   </div>;
@@ -1676,6 +1678,27 @@ function AvaManagedTask({task,onAction}){
       {isContact&&<><button className="btn primary" onClick={()=>onAction(task,'reached')}>✓ Erreicht</button><button className="btn soft" onClick={()=>onAction(task,'not_reached')}>Nicht erreicht</button></>}
       {!isContact&&<button className="btn primary" onClick={()=>onAction(task,'done')}>✓ Erledigt</button>}
     </div>
+  </div>;
+}
+
+function DeliveryPlannerModal({customer,onClose,onSave}){
+  const existing=customer.planned_delivery_at?new Date(customer.planned_delivery_at):null;
+  const localDate=(d)=>{if(!d||Number.isNaN(d.getTime()))return '';const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`};
+  const localTime=(d)=>{if(!d||Number.isNaN(d.getTime()))return '11:00';return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
+  const [date,setDate]=useState(localDate(existing));
+  const [time,setTime]=useState(localTime(existing));
+  const [saving,setSaving]=useState(false);
+  const submit=async(e)=>{e.preventDefault();if(!date||!time)return;const parsed=new Date(`${date}T${time}:00`);if(Number.isNaN(parsed.getTime())){alert('Bitte Datum und Uhrzeit auswählen.');return}setSaving(true);try{await onSave(parsed.toISOString())}finally{setSaving(false)}};
+  return <div className="modalBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
+    <form className="deliveryPlannerModal" onSubmit={submit}>
+      <div className="deliveryPlannerHead"><div><span className="eyebrow">AVA Kalender</span><h2>🚗 Auslieferung planen</h2><p>{customer.name}{customer.purchased_vehicle?` · ${customer.purchased_vehicle}`:''}</p></div><button type="button" className="closeButton" onClick={onClose}>×</button></div>
+      <div className="deliveryPlannerFields">
+        <label><span>📅 Auslieferungsdatum</span><input required type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>
+        <label><span>🕐 Uhrzeit</span><input required type="time" step="900" value={time} onChange={e=>setTime(e.target.value)}/></label>
+      </div>
+      <div className="deliveryPlannerHint"><span>✓</span><div><b>AVA übernimmt den Rest</b><p>Der Termin wird automatisch im Kalender gespeichert und die Verkaufsakte springt auf „Abholung geplant“.</p></div></div>
+      <div className="deliveryPlannerActions"><button type="button" className="btn soft" onClick={onClose}>Abbrechen</button><button className="btn primary" disabled={saving||!date||!time}>{saving?'Wird gespeichert…':'Auslieferung planen'}</button></div>
+    </form>
   </div>;
 }
 
