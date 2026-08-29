@@ -1145,6 +1145,26 @@ function TodayView({avaFocus,salesRadar,onCoach,openTasks,todayEvents,customers,
       <div className="dateCard"><span>{new Date().toLocaleDateString('de-DE',{weekday:'long'})}</span><b>{new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'long'})}</b></div>
     </div>
 
+    <div className="todayCockpit">
+      <div className="cockpitCol">
+    <section className="mustTodaySection">
+      <div className="sectionTitle"><div><span className="eyebrow">Nicht vergessen</span><h2>🚨 Muss heute passieren</h2></div><span>{(avaFocus?.now||[]).length} wichtige Punkte</span></div>
+      <div className="mustTodayGrid">
+        {(avaFocus?.now||[]).length?(avaFocus.now.map(i=><button key={i.key} className="mustTodayCard" onClick={()=>i.customer&&onOpenCustomer(i.customer)}>
+          <div><b>{i.title}</b><span>{i.subtitle||'—'}</span></div>{i.due&&<strong>{fmtTime(i.due)}</strong>}
+        </button>)):<EmptyState title="Alles im grünen Bereich" text="Aktuell gibt es keinen dringenden wichtigen Punkt für heute." compact/>}
+      </div>
+    </section>
+
+    <section className="todayScheduleSection">
+      <div className="sectionTitle"><div><span className="eyebrow">Tagesablauf</span><h2>📅 Deine Termine heute</h2></div><span>{todayEvents.length} Termin(e)</span></div>
+      <div className="todayTimeline">
+        {todayEvents.length?todayEvents.map(e=><AgendaItem key={e.id} event={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer}/>):<EmptyState title="Keine Termine" text="Für heute sind keine Kalendertermine gespeichert." compact/>}
+      </div>
+    </section>
+
+      </div>
+      <div className="cockpitCol">
     <section className="salesFocusSection">
       <div className="salesFocusHero">
         <div><span className="eyebrow">AVA Sales Focus</span><h2>⚡ Das solltest du jetzt tun, um mehr zu verkaufen</h2><p>Abschlusschance, Dringlichkeit und 80/20-Potenzial – automatisch priorisiert.</p></div>
@@ -1168,21 +1188,23 @@ function TodayView({avaFocus,salesRadar,onCoach,openTasks,todayEvents,customers,
       </div>
     </section>
 
-    <section className="mustTodaySection">
-      <div className="sectionTitle"><div><span className="eyebrow">Nicht vergessen</span><h2>🚨 Muss heute passieren</h2></div><span>{(avaFocus?.now||[]).length} wichtige Punkte</span></div>
-      <div className="mustTodayGrid">
-        {(avaFocus?.now||[]).length?(avaFocus.now.map(i=><button key={i.key} className="mustTodayCard" onClick={()=>i.customer&&onOpenCustomer(i.customer)}>
-          <div><b>{i.title}</b><span>{i.subtitle||'—'}</span></div>{i.due&&<strong>{fmtTime(i.due)}</strong>}
-        </button>)):<EmptyState title="Alles im grünen Bereich" text="Aktuell gibt es keinen dringenden wichtigen Punkt für heute." compact/>}
+    <section className="todayWorkSection">
+      <div className="sectionTitle"><div><span className="eyebrow">Operativ</span><h2>Aufgaben & Team</h2></div><button className="btn soft smallBtn" onClick={onAddTodo}>+ To-do</button></div>
+      <div className="twoCol">
+        <div>
+          <SectionTitle title="Offene Aufgaben" hint="nach Priorität"/>
+          <div className="stack">{openTasks.length?openTasks.slice(0,8).map(t=><TaskCard key={t.id} task={t} customer={customerMap[t.customer_id]} onReached={()=>onReached(t)} onNotReached={()=>onNotReached(t)} onDone={()=>onDone(t)} onOpenCustomer={onOpenCustomer}/>):<EmptyState title="Alles erledigt" text="Aktuell sind keine offenen Aufgaben vorhanden."/>}</div>
+        </div>
+        <aside className="rightRail">
+          <SectionTitle title="Meine To-dos" hint="heute"/>
+          <TodoList todos={todos} members={teamMembers||[]} uid={uid} onToggle={onToggleTodo} onDelete={onDeleteTodo} onCompleteAssigned={onCompleteAssigned}/>
+          {contractAlerts.length>0&&<><SectionTitle title="Vertragschancen" hint="ca. 6 Monate"/><div className="stack">{contractAlerts.map(c=><div className="opportunity" key={c.id}><div><span className="statusBadge green">Chance</span><b>{c.name}</b><small>{c.vehicle_interest||'Fahrzeug'} · Ende {fmtDate(c.contract_end_date)}</small></div><button className="btn soft smallBtn" onClick={()=>onQuick(c,'offer')}>Kontakt planen</button></div>)}</div></>}
+        </aside>
       </div>
     </section>
 
-    <section className="todayScheduleSection">
-      <div className="sectionTitle"><div><span className="eyebrow">Tagesablauf</span><h2>📅 Deine Termine heute</h2></div><span>{todayEvents.length} Termin(e)</span></div>
-      <div className="todayTimeline">
-        {todayEvents.length?todayEvents.map(e=><AgendaItem key={e.id} event={e} customer={customerMap[e.customer_id]} onOpenCustomer={onOpenCustomer}/>):<EmptyState title="Keine Termine" text="Für heute sind keine Kalendertermine gespeichert." compact/>}
       </div>
-    </section>
+    </div>
 
     <section className="smartSection">
       <div className="sectionTitle"><div><span className="eyebrow">AVA Intelligence</span><h2>🧠 AVA empfiehlt</h2></div><span>Chancen, die sonst leicht liegen bleiben</span></div>
@@ -1201,21 +1223,6 @@ function TodayView({avaFocus,salesRadar,onCoach,openTasks,todayEvents,customers,
           <div className="radarAdvice"><small>AVA empfiehlt</small><b>{r.action}</b></div>
           <div className="radarActions"><button className="btn soft" onClick={()=>onOpenCustomer(r.customer)}>Kundenakte</button><button className="btn coachBtn" onClick={()=>onCoach(r.customer)}>✨ Sales Coach</button></div>
         </div>):<EmptyState title="Fokus ist klar" text="Aktuell gibt es keine weiteren priorisierten Verkaufschancen." compact/>}
-      </div>
-    </section>
-
-    <section className="todayWorkSection">
-      <div className="sectionTitle"><div><span className="eyebrow">Operativ</span><h2>Aufgaben & Team</h2></div><button className="btn soft smallBtn" onClick={onAddTodo}>+ To-do</button></div>
-      <div className="twoCol">
-        <div>
-          <SectionTitle title="Offene Aufgaben" hint="nach Priorität"/>
-          <div className="stack">{openTasks.length?openTasks.slice(0,8).map(t=><TaskCard key={t.id} task={t} customer={customerMap[t.customer_id]} onReached={()=>onReached(t)} onNotReached={()=>onNotReached(t)} onDone={()=>onDone(t)} onOpenCustomer={onOpenCustomer}/>):<EmptyState title="Alles erledigt" text="Aktuell sind keine offenen Aufgaben vorhanden."/>}</div>
-        </div>
-        <aside className="rightRail">
-          <SectionTitle title="Meine To-dos" hint="heute"/>
-          <TodoList todos={todos} members={teamMembers||[]} uid={uid} onToggle={onToggleTodo} onDelete={onDeleteTodo} onCompleteAssigned={onCompleteAssigned}/>
-          {contractAlerts.length>0&&<><SectionTitle title="Vertragschancen" hint="ca. 6 Monate"/><div className="stack">{contractAlerts.map(c=><div className="opportunity" key={c.id}><div><span className="statusBadge green">Chance</span><b>{c.name}</b><small>{c.vehicle_interest||'Fahrzeug'} · Ende {fmtDate(c.contract_end_date)}</small></div><button className="btn soft smallBtn" onClick={()=>onQuick(c,'offer')}>Kontakt planen</button></div>)}</div></>}
-        </aside>
       </div>
     </section>
 

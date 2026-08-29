@@ -1,7 +1,14 @@
-# AVA 1.4.14 – Sales Focus Fix
+# AVA 1.4.17 – Heute Cockpit
 
-Fix:
-- Gekaufte/bestellte Kunden erscheinen weder im Sales Radar noch im Sales Focus.
-- Buyer werden auch dann aus Sales Focus ausgeschlossen, wenn noch Aufgaben oder Auslieferungstermine zu ihnen existieren.
-- Auslieferungen bleiben operative Kalender-/Tagesaufgaben und werden nicht als Verkaufschance gewertet.
-- Kein neues SQL nötig.
+Desktop:
+- Zwei Spalten statt langer Einzelseite.
+- Links: Muss heute passieren + Kalender.
+- Rechts: AVA Sales Focus + Aufgaben & To-dos.
+- Darunter weiterhin volle Breite: AVA Intelligence, weitere Verkaufschancen, Tagesabschluss.
+- Listen im Cockpit sind kompakter, damit die wichtigsten Informationen ohne langes Scrollen sichtbar bleiben.
+
+Mobil:
+- Automatischer Wechsel auf eine Spalte.
+
+Keine neue Supabase-Migration nötig.
+Enthält alle Fixes aus AVA 1.4.16 und 1.4.14.

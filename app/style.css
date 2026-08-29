@@ -292,3 +292,24 @@ input::placeholder,textarea::placeholder{color:#52657b!important}
 /* AVA 1.4.9 – Today workspace hierarchy */
 .todayHero{margin-bottom:14px}.todayHero h1{margin-bottom:4px}.mustTodaySection,.todayScheduleSection,.todayWorkSection{margin:22px 0}.mustTodayGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.mustTodayCard{display:flex;justify-content:space-between;align-items:center;text-align:left;padding:12px 13px;border-radius:13px;border:1px solid #57303a;background:linear-gradient(145deg,#161116,#081622);color:#edf6ff}.mustTodayCard>div{display:flex;flex-direction:column;gap:3px}.mustTodayCard b{font-size:9px}.mustTodayCard span{font-size:8px;color:#8499ad}.mustTodayCard strong{font-size:10px;color:#ff9c8c}.todayTimeline{padding:8px 12px;border:1px solid #183b58;border-radius:16px;background:#071522}.compactRadar{margin-top:24px}.todayWorkSection{padding-top:4px;border-top:1px solid #15314a}
 @media(max-width:760px){.mustTodayGrid{grid-template-columns:1fr}}
+
+/* AVA 1.4.17 – Today Cockpit */
+.todayCockpit{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start;margin:10px 0 24px}
+.cockpitCol{display:flex;flex-direction:column;gap:14px;min-width:0}
+.todayCockpit .mustTodaySection,.todayCockpit .todayScheduleSection,.todayCockpit .todayWorkSection,.todayCockpit .salesFocusSection{margin:0}
+.todayCockpit .mustTodayGrid{grid-template-columns:1fr}
+.todayCockpit .twoCol{grid-template-columns:1fr}
+.todayCockpit .rightRail{margin-top:10px}
+.todayCockpit .nextActionCard{grid-template-columns:48px minmax(0,1fr)}
+.todayCockpit .nextActionButtons{grid-column:1/-1;flex-direction:row}
+.todayCockpit .nextActionButtons .btn{flex:1}
+.todayCockpit .salesFocusHero{padding:14px}
+.todayCockpit .salesFocusHero h2{font-size:14px}
+.todayCockpit .salesFocusHero p{font-size:8px}
+.todayCockpit .nextBestActions .nextActionCard:nth-child(n+5){display:none}
+.todayCockpit .todayTimeline>*:nth-child(n+6){display:none}
+.todayCockpit .stack>*:nth-child(n+6){display:none}
+@media(max-width:900px){
+  .todayCockpit{grid-template-columns:1fr}
+  .cockpitCol{gap:12px}
+}
