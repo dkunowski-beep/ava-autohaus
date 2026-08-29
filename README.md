@@ -1,9 +1,7 @@
-# AVA 1.4.12 – Kontaktquelle bearbeiten
+# AVA 1.4.14 – Sales Focus Fix
 
 Fix:
-- In der Kundenakte unter Bearbeiten ist die Kontaktquelle jetzt sichtbar und änderbar.
-- Bestehende Kontaktquelle wird beim Öffnen übernommen.
-- Auswahl entspricht der Kontaktquelle beim Anlegen.
-- Kein neues SQL nötig, wenn die 1.4.10-Migration bereits ausgeführt wurde.
-
-Einfach deployen.
+- Gekaufte/bestellte Kunden erscheinen weder im Sales Radar noch im Sales Focus.
+- Buyer werden auch dann aus Sales Focus ausgeschlossen, wenn noch Aufgaben oder Auslieferungstermine zu ihnen existieren.
+- Auslieferungen bleiben operative Kalender-/Tagesaufgaben und werden nicht als Verkaufschance gewertet.
+- Kein neues SQL nötig.

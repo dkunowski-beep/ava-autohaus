@@ -213,7 +213,7 @@ function Dashboard({session}){
   const salesRadar=useMemo(()=>{
     const now=Date.now();
     const stageScore={lead:28,test_drive:62,offer:76,sold:100,delivery:100};
-    return customers.filter(c=>!['sold','delivery'].includes(c.stage)).map(c=>{
+    return customers.filter(c=>!['sold','delivery','ordered','customer'].includes(c.stage)).map(c=>{
       let score=stageScore[c.stage]||25;
       const reasons=[];
       const ce=(events||[]).filter(e=>e.customer_id===c.id&&e.status!=='cancelled');
@@ -238,6 +238,8 @@ function Dashboard({session}){
   },[customers,events,tasks]);
 
 
+  const isOpenSalesCustomer=(customer)=>!!customer && !['sold','delivery','ordered','customer'].includes(customer.stage) && customer.customer_kind!=='buyer';
+
   const avaFocus=useMemo(()=>{
     const now=new Date();
     const todayEnd=new Date(); todayEnd.setHours(23,59,59,999);
@@ -253,6 +255,7 @@ function Dashboard({session}){
     (tasks||[]).filter(t=>t.status==='open').forEach(t=>{
       const due=t.due_at?new Date(t.due_at):null;
       const customer=customerMap[t.customer_id];
+      if(customer && !isOpenSalesCustomer(customer))return;
       const item={key:'task-'+t.id,title:t.title||'Aufgabe',subtitle:customer?`${customer.name}${customer.vehicle_interest?` · ${customer.vehicle_interest}`:''}`:(t.details||''),due,source:'task',customer,raw:t};
       const urgent=!!due && due<=todayEnd;
       const important=!!customer || /angebot|probefahrt|ausliefer|rückruf|rueckruf|nachkontakt|vertrag|finanz|leasing/i.test(t.title||'');
@@ -266,6 +269,7 @@ function Dashboard({session}){
       const when=new Date(e.starts_at);
       if(when<now || when>tomorrowEnd)return;
       const customer=customerMap[e.customer_id];
+      if(customer && !isOpenSalesCustomer(customer))return;
       const item={key:'event-'+e.id,title:e.title||'Termin',subtitle:customer?`${customer.name}${customer.vehicle_interest?` · ${customer.vehicle_interest}`:''}`:fmtDateTime(e.starts_at),due:when,source:'event',customer,raw:e};
       if(when<=todayEnd)urgentImportant.push(item);
       else importantNotUrgent.push(item);
@@ -317,6 +321,57 @@ function Dashboard({session}){
   }
   function closeForm(){setShowForm(false);setSelected(null)}
 
+  async function syncDeliveryCalendarEvent(customer,deliveryAt){
+    if(!customer?.id)return {ok:false,error:'Kunde fehlt'};
+    const {data:existing,error:readError}=await supabase.from('ava_events')
+      .select('id,status,starts_at')
+      .eq('owner_id',uid)
+      .eq('customer_id',customer.id)
+      .eq('event_type','delivery')
+      .neq('status','completed')
+      .order('starts_at',{ascending:true});
+    if(readError)return {ok:false,error:readError.message};
+
+    const active=(existing||[]).find(e=>e.status!=='cancelled')||(existing||[])[0];
+
+    if(!deliveryAt){
+      if(active){
+        const {error}=await supabase.from('ava_events').delete().eq('id',active.id).eq('owner_id',uid);
+        if(error)return {ok:false,error:error.message};
+      }
+      return {ok:true};
+    }
+
+    const starts=new Date(deliveryAt);
+    if(Number.isNaN(starts.getTime()))return {ok:false,error:'Auslieferungstermin ungültig'};
+    const ends=new Date(starts.getTime()+60*60000);
+    const title=`Fahrzeugauslieferung · ${customer.name}`;
+
+    if(active){
+      const {error}=await supabase.from('ava_events').update({
+        title,
+        starts_at:starts.toISOString(),
+        ends_at:ends.toISOString(),
+        status:'planned',
+        notes:`Automatisch aus Kundenakte · ${customer.purchased_vehicle||customer.vehicle_interest||''}`
+      }).eq('id',active.id).eq('owner_id',uid);
+      if(error)return {ok:false,error:error.message};
+    }else{
+      const {error}=await supabase.from('ava_events').insert({
+        owner_id:uid,
+        customer_id:customer.id,
+        event_type:'delivery',
+        title,
+        starts_at:starts.toISOString(),
+        ends_at:ends.toISOString(),
+        status:'planned',
+        notes:`Automatisch aus Kundenakte · ${customer.purchased_vehicle||customer.vehicle_interest||''}`
+      });
+      if(error)return {ok:false,error:error.message};
+    }
+    return {ok:true};
+  }
+
   async function saveCustomer(e){
     e.preventDefault();
     if(['ordered','customer'].includes(form.stage)&&!form.customer_number.trim()){
@@ -343,6 +398,12 @@ function Dashboard({session}){
       });
       if(error) alert(error.message.includes('TERMIN_CONFLICT')?'Kunde gespeichert, aber Terminüberschneidung erkannt. Bitte Probefahrt ändern.':'Kunde gespeichert, Probefahrt konnte aber nicht geplant werden: '+error.message);
     }
+
+    const deliverySync=await syncDeliveryCalendarEvent(res.data,form.planned_delivery_at||null);
+    if(!deliverySync.ok){
+      alert('Kunde gespeichert, aber der Auslieferungstermin konnte nicht mit dem Kalender synchronisiert werden: '+deliverySync.error);
+    }
+
     closeForm(); await load();
   }
 
@@ -404,7 +465,10 @@ function Dashboard({session}){
     const parsed=new Date(dt.replace(' ','T'));
     if(Number.isNaN(parsed.getTime())){alert('Datum konnte nicht erkannt werden.');return}
     const {error}=await supabase.rpc('ava_start_delivery_assistant',{p_customer_id:customer.id,p_delivery_at:parsed.toISOString()});
-    if(error)alert(error.message);else await load();
+    if(error){alert(error.message);return}
+    const sync=await syncDeliveryCalendarEvent(customer,parsed.toISOString());
+    if(!sync.ok)alert('Auslieferung wurde gespeichert, aber der Kalendertermin konnte nicht angelegt werden: '+sync.error);
+    await load();
   }
 
   async function completeDelivery(customer){
