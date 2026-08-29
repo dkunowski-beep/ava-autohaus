@@ -1,17 +1,18 @@
-# AVA 1.5.1 – Automatischer Angebots-Workflow
+# AVA 1.6.0 – Automatisierte Verkaufsakte
 
-Neu:
-- Manueller Button „Angebot nachfassen“ entfernt.
-- Neuer Button: „📤 Angebot versendet“.
-- Beim Klick speichert AVA den Versandzeitpunkt und setzt den Kunden in die Angebotsphase.
-- Automatisch wird genau EIN Nachkontakt in 2 Tagen angelegt.
-- Doppel-Klicks erzeugen keine doppelten Aufgaben.
-- Bereits vorhandene doppelte Angebots-Follow-ups werden durch die Migration bereinigt.
-- Sales Radar / Sales Focus erkennen jetzt:
-  - Angebot versendet
-  - Nachkontakt geplant
-  - Angebots-Nachkontakt fällig
-- Ist der Kunde bereits Käufer, kann kein Angebotsprozess mehr gestartet werden.
+Großer Umbau:
+- Verkaufsakte ist jetzt eine große, mittig angezeigte Arbeitsfläche statt eines schmalen Drawers.
+- Desktop: große 2-Spalten-Verkaufsakte; mobil: Vollbild.
+- Der Verkaufsprozess und die nächste AVA-Aufgabe stehen im Mittelpunkt.
+- AVA-Aufgaben werden automatisch aus Ereignissen und Prozessschritten erzeugt.
+- Verkäufer bestätigt nur noch Ereignisse: Angebot versendet, Kunde erreicht/nicht erreicht, Auto da, Unterlagen da, unterschrieben, zugelassen, ausgeliefert.
+- Nicht erreicht -> derselbe Kontakt wird automatisch auf morgen verschoben.
+- Lieferstatus erreicht -> nächster Lieferstatus automatisch +21 Tage, solange das Fahrzeug noch nicht da ist.
+- Kaufabschluss schließt alte Verkaufsaufgaben und startet automatisch den 21-Tage-Lieferstatus.
+- Prozessschritte schließen die vorherige AVA-Aufgabe und erzeugen die nächste.
+- Angebotsversand bleibt idempotent: genau ein Follow-up in 2 Tagen.
+- Kundenübersicht, nächster Termin, Dokumente und Historie sind kompakt in der neuen Akte organisiert.
 
 WICHTIG:
-Vor Deployment einmal `supabase/ava_1_5_1_offer_workflow.sql` im Supabase SQL Editor ausführen.
+Vor Deployment einmal `supabase/ava_1_6_0_automation.sql` im Supabase SQL Editor ausführen.
+Danach AVA 1.6.0 deployen.

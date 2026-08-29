@@ -449,6 +449,13 @@ function Dashboard({session}){
     }
   }
 
+  async function handleAvaTask(task,action){
+    if(!task?.id)return;
+    const {error}=await supabase.rpc('ava_handle_automated_task',{p_task_id:task.id,p_action:action});
+    if(error){alert('AVA-Aufgabe konnte nicht verarbeitet werden: '+error.message);return}
+    await load();
+  }
+
   async function taskReached(t){
     if(t.type==='test_drive_prepare'){
       await supabase.from('ava_tasks').update({status:'done',completed_at:new Date().toISOString()}).eq('id',t.id);
@@ -1163,7 +1170,7 @@ function Dashboard({session}){
     </main>
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
-    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onHandover={c=>setHandoverCustomer(c)} onOfferSent={markOfferSent} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onAdvanceProcess={advanceSalesProcess} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
+    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onHandover={c=>setHandoverCustomer(c)} onOfferSent={markOfferSent} onTaskAction={handleAvaTask} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onAdvanceProcess={advanceSalesProcess} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
     {coachCustomer&&<SalesCoachModal customer={coachCustomer} history={history.filter(h=>h.customer_id===coachCustomer.id)} events={events.filter(e=>e.customer_id===coachCustomer.id)} onClose={()=>setCoachCustomer(null)}/>} 
     {handoverCustomer&&<HandoverCustomerModal customer={handoverCustomer} uid={uid} members={teamMembers} onClose={()=>setHandoverCustomer(null)} onHandover={handoverCustomerTo}/>} 
     {notificationOpen&&<NotificationCenter notifications={notifications} prefs={notificationPrefs} onClose={()=>{setNotificationOpen(false);markNotificationsRead()}} onPermission={requestNotificationPermission} onPref={updateNotificationPref}/>} 
@@ -1577,40 +1584,98 @@ function HandoverCustomerModal({customer,uid,members,onClose,onHandover}){
   </form></div>;
 }
 
-function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,onMail,onHandover,onOfferSent,onQuick,onUpload,onOpenDocument,onPurchase,onAdvanceProcess,onDeliveryStart,onDeliveryComplete,onWait,onDelete}){
+function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,onMail,onHandover,onOfferSent,onTaskAction,onQuick,onUpload,onOpenDocument,onPurchase,onAdvanceProcess,onDeliveryStart,onDeliveryComplete,onWait,onDelete}){
   const stage=STAGES[customer.stage]||STAGES.lead;
-  return <div className="drawerBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
-    <aside className="drawer">
-      <div className="drawerHead"><div><span className={`statusBadge ${stage.tone}`}>{stage.label}</span><h2>{customer.name}</h2><p>{customer.customer_number?`Kundennummer ${customer.customer_number}`:'Interessent · Kundennummer folgt beim Kauf'}</p></div><button className="closeButton" onClick={onClose}>×</button></div>
-      <div className="drawerActions"><button className="btn primary" onClick={onEdit}>Bearbeiten</button><button className="btn soft" onClick={onMail}>E-Mail erstellen</button><button className="btn soft" onClick={()=>onHandover(customer)}>↗ An Kollegen übergeben</button><button className="btn ghost" onClick={()=>onWait(customer)}>{customer.waiting_on_customer?'Warten beenden':'Wartet auf Kunde'}</button></div>
-      <DetailSection title="Kontakt"><DetailRow label="Telefon" value={customer.phone}/><DetailRow label="E-Mail" value={customer.email}/><DetailRow label="Kontaktquelle" value={contactSourceLabel(customer.contact_source)}/></DetailSection>
-      <DetailSection title="Fahrzeug"><DetailRow label="Fahrzeuginteresse" value={customer.vehicle_interest}/><DetailRow label="Gekauftes Fahrzeug" value={customer.purchased_vehicle}/><DetailRow label="Notizen" value={customer.notes}/></DetailSection>
-      <DetailSection title="Termine & Vertrag">
-        <DetailRow label="Probefahrt" value={customer.test_drive_at?fmtDateTime(customer.test_drive_at):null}/>
-        <DetailRow label="Bestelldatum" value={customer.ordered_at?fmtDate(customer.ordered_at):null}/>
-        <DetailRow label="Geplante Auslieferung" value={customer.planned_delivery_at?fmtDateTime(customer.planned_delivery_at):null}/>
-        <DetailRow label="Auslieferungsdatum" value={customer.delivered_at?fmtDate(customer.delivered_at):null}/>
-        <DetailRow label="Vertragsende Leasing / Finanzierung" value={customer.contract_end_date?fmtDate(customer.contract_end_date):null}/>
+  const openTasks=tasks.filter(t=>t.status==='open');
+  const nextEvent=[...events].filter(e=>e.status!=='cancelled'&&new Date(e.starts_at)>=new Date()).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at))[0];
+  const isBuyer=['ordered','customer','sold','delivery'].includes(customer.stage)||customer.customer_kind==='buyer';
 
-      </DetailSection>
-      <DetailSection title="🚘 Verkaufsprozess">
-        <SalesProcess customer={customer} onPurchase={onPurchase} onAdvance={onAdvanceProcess} onPlanDelivery={onDeliveryStart} onCompleteDelivery={onDeliveryComplete}/>
-      </DetailSection>
-      <DetailSection title="Dokumente & Angebote">
-        <OfferDocuments customer={customer} documents={documents} onUpload={onUpload} onOpenDocument={onOpenDocument}/>
-      </DetailSection>
-      <DetailSection title="Nächste Aktionen">
-        <div className="quickGrid"><button className="offerSentAction" onClick={()=>onOfferSent(customer)}>📤 Angebot versendet</button><button onClick={()=>onQuick('test_drive')}>Probefahrt nachfassen</button><button onClick={()=>onQuick('delivery')}>Auslieferung nachfassen</button><button onClick={()=>onQuick('delivery_update')}>Lieferstatus</button></div>
-      </DetailSection>
-      <DetailSection title="Offene Aufgaben">
-        {tasks.filter(t=>t.status==='open').length?tasks.filter(t=>t.status==='open').map(t=><div className="miniTask" key={t.id}><b>{t.title}</b><span>{fmtDateTime(t.due_at)}</span></div>):<span className="muted">Keine offenen Aufgaben</span>}
-      </DetailSection>
-      <HistoryButton history={history}/>
-      <DetailSection title="Verwaltung">
-        <div className="dangerZone"><div><b>Kunde / Interessent löschen</b><span>Entfernt diesen Datensatz inklusive aller zugehörigen AVA-Daten endgültig.</span></div><button onClick={()=>onDelete(customer)}>Endgültig löschen</button></div>
-      </DetailSection>
+  return <div className="salesWorkspaceBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
+    <section className="salesWorkspace">
+      <header className="salesWorkspaceHeader">
+        <div className="salesWorkspaceIdentity">
+          <div className="salesWorkspaceAvatar">{initials(customer.name)}</div>
+          <div><div className="salesWorkspaceBadges"><span className={`statusBadge ${stage.tone}`}>{stage.label}</span>{customer.contact_source&&<span className="sourceBadge">{contactSourceLabel(customer.contact_source)}</span>}</div>
+          <h1>{customer.name}</h1><p>{customer.customer_number?`KD ${customer.customer_number}`:'Interessent'}{customer.vehicle_interest?` · ${customer.vehicle_interest}`:''}</p></div>
+        </div>
+        <div className="salesWorkspaceHeaderActions"><button className="btn soft" onClick={onEdit}>Bearbeiten</button><button className="btn soft" onClick={onMail}>E-Mail</button><button className="btn soft" onClick={()=>onHandover(customer)}>↗ Übergeben</button><button className="closeButton" onClick={onClose}>×</button></div>
+      </header>
 
-    </aside>
+      <div className="salesWorkspaceGrid">
+        <main className="salesWorkspaceMain">
+          <section className="workspacePanel processPanel">
+            <div className="workspacePanelTitle"><div><span className="eyebrow">AVA Automation</span><h2>🚘 Verkaufsprozess</h2></div><span>AVA steuert den nächsten Schritt</span></div>
+            <SalesProcess customer={customer} onPurchase={onPurchase} onAdvance={onAdvanceProcess} onPlanDelivery={onDeliveryStart} onCompleteDelivery={onDeliveryComplete}/>
+          </section>
+
+          <section className="workspacePanel">
+            <div className="workspacePanelTitle"><div><span className="eyebrow">Automatisch erzeugt</span><h2>✅ AVA Aufgaben</h2></div><span>{openTasks.length} offen</span></div>
+            <div className="avaManagedTasks">
+              {openTasks.length?openTasks.map(t=><AvaManagedTask key={t.id} task={t} onAction={onTaskAction}/>):<div className="automationEmpty"><span>✓</span><div><b>Kein offener Schritt</b><p>AVA erzeugt automatisch eine Aufgabe, sobald im Verkaufsprozess etwas zu tun ist.</p></div></div>}
+            </div>
+          </section>
+
+          {!isBuyer&&<section className="workspacePanel">
+            <div className="workspacePanelTitle"><div><span className="eyebrow">Verkaufsphase</span><h2>🎯 Nächste Verkaufsaktion</h2></div><span>nur Ereignis bestätigen</span></div>
+            <div className="salesEventActions">
+              <button className="salesEventAction primaryAction" onClick={()=>onOfferSent(customer)}><span>📤</span><div><b>Angebot versendet</b><small>AVA legt automatisch genau einen Nachkontakt in 2 Tagen an.</small></div></button>
+              {customer.test_drive_at&&<button className="salesEventAction" onClick={()=>onQuick('test_drive')}><span>🚗</span><div><b>Probefahrt erfolgt</b><small>AVA plant automatisch den passenden Nachkontakt.</small></div></button>}
+            </div>
+          </section>}
+
+          <section className="workspacePanel">
+            <div className="workspacePanelTitle"><div><span className="eyebrow">Verlauf</span><h2>Historie</h2></div><span>{history.length} Ereignisse</span></div>
+            <div className="workspaceHistory">{history.slice(0,8).map(h=><div className="workspaceHistoryItem" key={h.id}><span className="historyDot"/><div><b>{h.action}</b><p>{h.details||'—'}</p><small>{fmtDateTime(h.created_at)}</small></div></div>)}{!history.length&&<span className="muted">Noch keine Historie.</span>}</div>
+            <HistoryButton history={history}/>
+          </section>
+        </main>
+
+        <aside className="salesWorkspaceSide">
+          <section className="workspacePanel summaryPanel">
+            <div className="workspacePanelTitle"><h2>Kundenübersicht</h2></div>
+            <DetailRow label="Telefon" value={customer.phone}/>
+            <DetailRow label="E-Mail" value={customer.email}/>
+            <DetailRow label="Kontaktquelle" value={contactSourceLabel(customer.contact_source)}/>
+            <DetailRow label="Fahrzeuginteresse" value={customer.vehicle_interest}/>
+            <DetailRow label="Gekauftes Fahrzeug" value={customer.purchased_vehicle}/>
+            <DetailRow label="Bestelldatum" value={customer.ordered_at?fmtDate(customer.ordered_at):null}/>
+            <DetailRow label="Vertragsende" value={customer.contract_end_date?fmtDate(customer.contract_end_date):null}/>
+          </section>
+
+          <section className="workspacePanel nextAppointmentPanel">
+            <div className="workspacePanelTitle"><h2>📅 Nächster Termin</h2></div>
+            {nextEvent?<div className="nextAppointment"><b>{nextEvent.title}</b><span>{fmtDateTime(nextEvent.starts_at)}</span><small>{nextEvent.event_type==='delivery'?'Auslieferung / Abholung':'Kalendertermin'}</small></div>:<span className="muted">Kein kommender Termin.</span>}
+          </section>
+
+          <section className="workspacePanel">
+            <div className="workspacePanelTitle"><h2>📎 Dokumente & Angebote</h2></div>
+            <OfferDocuments customer={customer} documents={documents} onUpload={onUpload} onOpenDocument={onOpenDocument}/>
+          </section>
+
+          {customer.notes&&<section className="workspacePanel"><div className="workspacePanelTitle"><h2>📝 Notizen</h2></div><p className="workspaceNotes">{customer.notes}</p></section>}
+
+          <section className="workspacePanel workspaceAdmin">
+            <button className="btn ghost wide" onClick={()=>onWait(customer)}>{customer.waiting_on_customer?'Warten auf Kunde beenden':'Wartet auf Kunde'}</button>
+            <button className="workspaceDelete" onClick={()=>onDelete(customer)}>Kunde / Interessent endgültig löschen</button>
+          </section>
+        </aside>
+      </div>
+    </section>
+  </div>;
+}
+
+function AvaManagedTask({task,onAction}){
+  const due=task.due_at?new Date(task.due_at):null;
+  const overdue=due&&due<new Date();
+  const isContact=/offer|followup|contact|lieferstatus|nachkontakt/i.test(`${task.type||''} ${task.title||''}`);
+  const isDelivery=/zulassung|abhol|liefer|unterlagen/i.test(`${task.type||''} ${task.title||''}`);
+  return <div className={`avaManagedTask ${overdue?'overdue':''}`}>
+    <div className="avaTaskIcon">{isDelivery?'🚘':isContact?'💬':'✓'}</div>
+    <div className="avaTaskBody"><div><b>{task.title}</b>{task.managed_by_ava!==false&&<span className="avaManagedBadge">AVA</span>}</div><p>{task.details||'Automatisch aus dem Verkaufsprozess erzeugt.'}</p><small>{due?`${overdue?'Überfällig · ':''}${fmtDateTime(task.due_at)}`:'Ohne Termin'}</small></div>
+    <div className="avaTaskActions">
+      {isContact&&<><button className="btn primary" onClick={()=>onAction(task,'reached')}>✓ Erreicht</button><button className="btn soft" onClick={()=>onAction(task,'not_reached')}>Nicht erreicht</button></>}
+      {!isContact&&<button className="btn primary" onClick={()=>onAction(task,'done')}>✓ Erledigt</button>}
+    </div>
   </div>;
 }
 
