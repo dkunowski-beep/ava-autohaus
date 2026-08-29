@@ -459,6 +459,24 @@ function Dashboard({session}){
     await load();setDetail(null);
   }
 
+  async function advanceSalesProcess(customer,nextStep){
+    const labels={
+      vehicle_arrived:'Auto ist geliefert',
+      registration_docs_ready:'Zulassungsunterlagen sind da',
+      registration_signed:'Zulassungsanträge unterschrieben',
+      registration_complete:'Fahrzeug ist zugelassen'
+    };
+    if(!labels[nextStep])return;
+    if(!window.confirm(`${labels[nextStep]} bestätigen?`))return;
+
+    const {error}=await supabase.rpc('ava_advance_sales_process',{
+      p_customer_id:customer.id,
+      p_next_step:nextStep
+    });
+    if(error){alert('Prozess konnte nicht aktualisiert werden: '+error.message);return}
+    await load();
+  }
+
   async function startDeliveryAssistant(customer){
     const dt=window.prompt('Geplante Auslieferung (YYYY-MM-DD HH:MM):');
     if(!dt)return;
@@ -468,13 +486,18 @@ function Dashboard({session}){
     if(error){alert(error.message);return}
     const sync=await syncDeliveryCalendarEvent(customer,parsed.toISOString());
     if(!sync.ok)alert('Auslieferung wurde gespeichert, aber der Kalendertermin konnte nicht angelegt werden: '+sync.error);
+    await supabase.from('ava_customers').update({sales_process_step:'delivery_scheduled'}).eq('id',customer.id).eq('owner_id',uid);
+    await supabase.from('ava_history').insert({customer_id:customer.id,actor_id:uid,action:'Abholtermin vereinbart',details:parsed.toLocaleString('de-DE')});
     await load();
   }
 
   async function completeDelivery(customer){
     if(!window.confirm('Auslieferung als erfolgt markieren? AVA beendet Lieferaufgaben und plant den Nachkontakt für morgen.'))return;
     const {error}=await supabase.rpc('ava_complete_delivery',{p_customer_id:customer.id});
-    if(error)alert(error.message);else await load();
+    if(error){alert(error.message);return}
+    await supabase.from('ava_customers').update({sales_process_step:'delivered'}).eq('id',customer.id).eq('owner_id',uid);
+    await supabase.from('ava_history').insert({customer_id:customer.id,actor_id:uid,action:'Fahrzeug ausgeliefert',details:'Nachkontakt für den nächsten Tag eingeplant'});
+    await load();
   }
 
   async function toggleWaiting(customer){
@@ -1112,7 +1135,7 @@ function Dashboard({session}){
     </main>
     <MobileNav tab={tab} setTab={setTab}/>
     {showForm&&<CustomerForm selected={selected} form={form} setForm={setForm} onClose={closeForm} onSubmit={saveCustomer}/>}
-    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onHandover={c=>setHandoverCustomer(c)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
+    {detail&&<CustomerDetail customer={detail} history={history.filter(h=>h.customer_id===detail.id)} tasks={tasks.filter(t=>t.customer_id===detail.id)} documents={documents.filter(d=>d.customer_id===detail.id)} events={events.filter(e=>e.customer_id===detail.id)} onClose={()=>setDetail(null)} onEdit={()=>{setDetail(null);edit(detail)}} onMail={()=>openMail(detail)} onHandover={c=>setHandoverCustomer(c)} onQuick={type=>quickWorkflow(detail,type)} onUpload={uploadOffer} onOpenDocument={openDocument} onPurchase={markPurchase} onAdvanceProcess={advanceSalesProcess} onDeliveryStart={startDeliveryAssistant} onDeliveryComplete={completeDelivery} onWait={toggleWaiting} onDelete={deleteCustomer}/>}
     {coachCustomer&&<SalesCoachModal customer={coachCustomer} history={history.filter(h=>h.customer_id===coachCustomer.id)} events={events.filter(e=>e.customer_id===coachCustomer.id)} onClose={()=>setCoachCustomer(null)}/>} 
     {handoverCustomer&&<HandoverCustomerModal customer={handoverCustomer} uid={uid} members={teamMembers} onClose={()=>setHandoverCustomer(null)} onHandover={handoverCustomerTo}/>} 
     {notificationOpen&&<NotificationCenter notifications={notifications} prefs={notificationPrefs} onClose={()=>{setNotificationOpen(false);markNotificationsRead()}} onPermission={requestNotificationPermission} onPref={updateNotificationPref}/>} 
@@ -1526,7 +1549,7 @@ function HandoverCustomerModal({customer,uid,members,onClose,onHandover}){
   </form></div>;
 }
 
-function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,onMail,onHandover,onQuick,onUpload,onOpenDocument,onPurchase,onDeliveryStart,onDeliveryComplete,onWait,onDelete}){
+function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,onMail,onHandover,onQuick,onUpload,onOpenDocument,onPurchase,onAdvanceProcess,onDeliveryStart,onDeliveryComplete,onWait,onDelete}){
   const stage=STAGES[customer.stage]||STAGES.lead;
   return <div className="drawerBackdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
     <aside className="drawer">
@@ -1540,14 +1563,10 @@ function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,
         <DetailRow label="Geplante Auslieferung" value={customer.planned_delivery_at?fmtDateTime(customer.planned_delivery_at):null}/>
         <DetailRow label="Auslieferungsdatum" value={customer.delivered_at?fmtDate(customer.delivered_at):null}/>
         <DetailRow label="Vertragsende Leasing / Finanzierung" value={customer.contract_end_date?fmtDate(customer.contract_end_date):null}/>
-        {customer.planned_delivery_at&&<DeliveryChecklist checklist={customer.delivery_checklist}/>}
+
       </DetailSection>
-      <DetailSection title="AVA Verkaufsassistent">
-        <div className="assistantActionGrid">
-          {!['ordered','customer'].includes(customer.stage)&&<button onClick={()=>onPurchase(customer)}><span>✓</span><b>Kaufabschluss</b><small>Kundennummer + gekauftes Fahrzeug</small></button>}
-          {customer.stage==='ordered'&&<button onClick={()=>onDeliveryStart(customer)}><span>🚗</span><b>Auslieferung planen</b><small>AVA erstellt die Vorbereitung</small></button>}
-          {customer.stage==='ordered'&&customer.planned_delivery_at&&<button onClick={()=>onDeliveryComplete(customer)}><span>✓</span><b>Auslieferung erfolgt</b><small>Nachkontakt morgen</small></button>}
-        </div>
+      <DetailSection title="🚘 Verkaufsprozess">
+        <SalesProcess customer={customer} onPurchase={onPurchase} onAdvance={onAdvanceProcess} onPlanDelivery={onDeliveryStart} onCompleteDelivery={onDeliveryComplete}/>
       </DetailSection>
       <DetailSection title="Dokumente & Angebote">
         <OfferDocuments customer={customer} documents={documents} onUpload={onUpload} onOpenDocument={onOpenDocument}/>
@@ -1567,11 +1586,45 @@ function CustomerDetail({customer,history,tasks,documents,events,onClose,onEdit,
   </div>;
 }
 
-function DeliveryChecklist({checklist}){
-  const c=checklist||{};
-  const rows=[['vehicle_ready','Fahrzeug / Aufbereitung'],['documents_ready','Papiere'],['registration_ready','Zulassung'],['customer_confirmed','Termin mit Kunde bestätigt']];
-  return <div className="deliveryChecklist">{rows.map(([k,l])=><div key={k}><span className={c[k]?'checkOn':'checkOff'}>{c[k]?'✓':'○'}</span><b>{l}</b></div>)}</div>;
+function SalesProcess({customer,onPurchase,onAdvance,onPlanDelivery,onCompleteDelivery}){
+  const raw=customer.sales_process_step||(
+    customer.stage==='customer'?'delivered':
+    customer.stage==='ordered'?'ordered':'prospect'
+  );
+  const steps=[
+    ['ordered','Bestellt'],
+    ['vehicle_arrived','Fahrzeug da'],
+    ['registration_docs_ready','Unterlagen da'],
+    ['registration_signed','Unterschrieben'],
+    ['registration_complete','Zugelassen'],
+    ['delivery_scheduled','Abholung'],
+    ['delivered','Ausgeliefert'],
+    ['followup_done','Nachkontakt']
+  ];
+  const rank=Object.fromEntries(steps.map((x,i)=>[x[0],i]));
+  const current=rank[raw]??-1;
+  const next={
+    ordered:{icon:'🚚',title:'Auto ist geliefert',text:'Beendet die 3-Wochen-Lieferstatusphase und startet die Zulassungsvorbereitung.',action:()=>onAdvance(customer,'vehicle_arrived')},
+    vehicle_arrived:{icon:'📄',title:'Zulassungsunterlagen sind da',text:'Bestätigt, dass die benötigten Unterlagen vom Kunden vorliegen.',action:()=>onAdvance(customer,'registration_docs_ready')},
+    registration_docs_ready:{icon:'✍️',title:'Zulassungsanträge unterschrieben',text:'Der Kunde war da und die Zulassungsanträge sind unterschrieben.',action:()=>onAdvance(customer,'registration_signed')},
+    registration_signed:{icon:'✅',title:'Fahrzeug ist zugelassen',text:'Die Zulassung ist abgeschlossen. Danach wird der Abholtermin vereinbart.',action:()=>onAdvance(customer,'registration_complete')},
+    registration_complete:{icon:'📅',title:'Abholtermin vereinbaren',text:'Datum und Uhrzeit festlegen – AVA übernimmt den Termin direkt in den Kalender.',action:()=>onPlanDelivery(customer)},
+    delivery_scheduled:{icon:'🚗',title:'Fahrzeug ausgeliefert',text:'Übergabe abschließen. AVA plant automatisch den Nachkontakt für morgen.',action:()=>onCompleteDelivery(customer)}
+  }[raw];
+
+  if(raw==='prospect')return <div className="salesProcess">
+    <div className="processIntro"><b>Noch im Verkauf</b><span>Sobald der Kunde kauft, startet AVA den Bestell- und Auslieferungsprozess.</span></div>
+    <button className="processNextBtn" onClick={()=>onPurchase(customer)}><span>✓</span><div><b>Kaufabschluss</b><small>Fahrzeug bestellt · Prozess starten</small></div><strong>›</strong></button>
+  </div>;
+
+  return <div className="salesProcess">
+    <div className="processSteps">{steps.map(([key,label],i)=><div key={key} className={`processStep ${i<current?'done':i===current?'active':''}`}><span>{i<current?'✓':i+1}</span><small>{label}</small></div>)}</div>
+    {raw==='delivered'&&<div className="processNextBox success"><span>📞</span><div><small>Nächster Schritt</small><b>Nachkontakt nach der ersten Fahrt</b><p>AVA hat den Nachkontakt automatisch für den nächsten Tag eingeplant.</p></div></div>}
+    {raw==='followup_done'&&<div className="processNextBox success"><span>✓</span><div><small>Prozess abgeschlossen</small><b>Kunde vollständig betreut</b><p>Vom Erstkontakt bis zum Nachkontakt abgeschlossen.</p></div></div>}
+    {next&&<><div className="processNow"><small>AKTUELLER SCHRITT</small><b>{steps[current]?.[1]||raw}</b></div><button className="processNextBtn" onClick={next.action}><span>{next.icon}</span><div><b>{next.title}</b><small>{next.text}</small></div><strong>›</strong></button></>}
+  </div>;
 }
+
 
 function OfferDocuments({customer,documents,onUpload,onOpenDocument}){
   const cameraRef=useRef(null),fileRef=useRef(null);

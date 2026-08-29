@@ -1,7 +1,18 @@
-# AVA 1.4.18 – Kontaktquelle Speichern Fix
+# AVA 1.5.0 – Dynamischer Verkaufsprozess
 
-Fix:
-- Kontaktquelle wurde im Bearbeiten-Formular korrekt geändert, aber beim Speichern nicht an Supabase gesendet.
-- `contact_source` ist jetzt Bestandteil des zentralen Kunden-Speicher-Payloads.
-- Funktioniert für neue Kunden und Änderungen bestehender Kunden.
-- Kein neues SQL nötig, sofern die 1.4.10-Migration bereits ausgeführt wurde.
+AVA führt Käufer jetzt Schritt für Schritt durch den Autohaus-Prozess:
+
+Bestellt → Fahrzeug da → Unterlagen da → Unterschrieben → Zugelassen → Abholung → Ausgeliefert → Nachkontakt
+
+Funktionen:
+- Nach Kauf: Lieferstatus-Aufgabe nach 21 Tagen.
+- „Auto ist geliefert“ beendet offene Lieferstatus-Aufgaben und erstellt „Zulassungsunterlagen anfordern“.
+- „Zulassungsunterlagen sind da“ erstellt die Aufgabe für die Unterschrift.
+- „Zulassungsanträge unterschrieben“ schaltet auf Zulassung läuft.
+- „Fahrzeug ist zugelassen“ erstellt „Abholtermin vereinbaren“.
+- Abholtermin wird über die bestehende Kalender-Synchronisierung direkt im Kalender gespeichert.
+- „Fahrzeug ausgeliefert“ nutzt den bestehenden Delivery-RPC und markiert den Prozess als ausgeliefert.
+- Kundenhistorie protokolliert die Prozessschritte.
+- Alte passive Delivery-Checkliste wurde durch den aktiven Verkaufsprozess ersetzt.
+
+WICHTIG: Vor Deployment einmal `supabase/ava_1_5_0_sales_process.sql` im Supabase SQL Editor ausführen.
