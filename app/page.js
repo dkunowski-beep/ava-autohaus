@@ -382,7 +382,7 @@ function Dashboard({session}){
     const cleanDateTime=v=>v&&String(v).trim()?new Date(v).toISOString():null;
     const payload={
       name:form.name,customer_number:form.customer_number||null,phone:form.phone||null,email:form.email||null,
-      vehicle_interest:form.vehicle_interest||null,purchased_vehicle:form.purchased_vehicle||null,stage:form.stage,customer_kind:['ordered','customer'].includes(form.stage)?'buyer':'prospect',notes:form.notes||null,
+      vehicle_interest:form.vehicle_interest||null,contact_source:form.contact_source||null,purchased_vehicle:form.purchased_vehicle||null,stage:form.stage,customer_kind:['ordered','customer'].includes(form.stage)?'buyer':'prospect',notes:form.notes||null,
       contract_end_date:cleanDate(form.contract_end_date),ordered_at:cleanDate(form.ordered_at),delivered_at:cleanDate(form.delivered_at),
       test_drive_at:cleanDateTime(form.test_drive_at),planned_delivery_at:cleanDateTime(form.planned_delivery_at),owner_id:uid
     };
